@@ -101,6 +101,58 @@ class ComplexLift(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# ComplexPositionalEncoding — installs the "time axis" that makes the
+# per-token complex vectors into a coherent signal across the sequence
+# ---------------------------------------------------------------------------
+# After ComplexLift, each token has a complex vector but there is no notion
+# of "the signal evolves across the sequence" — position is only implicit
+# (whatever attention infers). This module rotates each complex channel by an
+# angle proportional to token position, turning the sequence into a genuine
+# multi-frequency complex waveform.
+#
+#     z'_t[k] = z_t[k] · exp(i · t · ω_k),     ω_k = base^(−k / d_model)
+#
+#   * Low-k channels rotate fast (high frequency → local structure)
+#   * High-k channels rotate slow (low frequency → long-range structure)
+#   * Multiplicative (rotary-style), so AMPLITUDE is preserved exactly:
+#     |z'_t[k]| = |z_t[k]|. Only the phase carries the position information.
+#   * At position t=0 the rotation is identity (exp(0) = 1), so the first
+#     token is unchanged.
+#
+# Implemented with real-only arithmetic (cos/sin buffers) so it runs on
+# MPS / CUDA / CPU without complex-kernel surprises.
+# ---------------------------------------------------------------------------
+class ComplexPositionalEncoding(nn.Module):
+    def __init__(self, d_model: int, max_len: int = 2048, base: float = 10000.0):
+        super().__init__()
+        self.d_model = d_model
+        self.max_len = max_len
+        k = torch.arange(d_model, dtype=torch.float32)
+        omega = base ** (-k / d_model)                  # (d_model,)
+        t = torch.arange(max_len, dtype=torch.float32)  # (max_len,)
+        theta = torch.outer(t, omega)                   # (max_len, d_model)
+        # Precompute unit-modulus rotation factors as real cos/sin buffers
+        self.register_buffer("cos", torch.cos(theta), persistent=False)
+        self.register_buffer("sin", torch.sin(theta), persistent=False)
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        # z: (B, T, D) complex → (B, T, D) complex
+        T = z.shape[1]
+        if T > self.max_len:
+            raise ValueError(
+                f"sequence length {T} exceeds max_len {self.max_len}; "
+                f"increase max_len in ComplexPositionalEncoding"
+            )
+        cos = self.cos[:T].unsqueeze(0)   # (1, T, D)
+        sin = self.sin[:T].unsqueeze(0)
+        z_re, z_im = z.real, z.imag
+        # complex multiply z * (cos + i sin), done in real arithmetic
+        out_re = z_re * cos - z_im * sin
+        out_im = z_re * sin + z_im * cos
+        return torch.complex(out_re, out_im)
+
+
+# ---------------------------------------------------------------------------
 # modReLU — complex activation that gates magnitude and preserves phase
 # ---------------------------------------------------------------------------
 # Real ReLU doesn't generalize to complex (zero is a manifold, not a
@@ -188,21 +240,39 @@ class ComplexAttention(nn.Module):
         z: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        # MPS-safe implementation: do ALL heavy math in real space. Complex
+        # einsum and .conj() on MPS have patchy support; the real-decomposition
+        # path below is mathematically identical, runs everywhere (CUDA / MPS /
+        # CPU), and has essentially the same cost as the complex variant
+        # (complex matmul on CUDA is internally four real matmuls anyway).
         B, T, D = z.shape
         Q = self.q_proj(z).view(B, T, self.n_heads, self.d_head).transpose(1, 2)
         K = self.k_proj(z).view(B, T, self.n_heads, self.d_head).transpose(1, 2)
         V = self.v_proj(z).view(B, T, self.n_heads, self.d_head).transpose(1, 2)
 
-        # Complex inner product → magnitude → softmax
-        raw = torch.einsum("bhid,bhjd->bhij", Q, K.conj())
-        scores = raw.abs() / math.sqrt(self.d_head)
+        # Q · K^H = (Q_re + i Q_im) · (K_re − i K_im)^T
+        #        = (Q_re K_re^T + Q_im K_im^T) + i (Q_im K_re^T − Q_re K_im^T)
+        Q_re, Q_im = Q.real, Q.imag
+        K_re, K_im = K.real, K.imag
+        raw_re = (
+            torch.einsum("bhid,bhjd->bhij", Q_re, K_re)
+            + torch.einsum("bhid,bhjd->bhij", Q_im, K_im)
+        )
+        raw_im = (
+            torch.einsum("bhid,bhjd->bhij", Q_im, K_re)
+            - torch.einsum("bhid,bhjd->bhij", Q_re, K_im)
+        )
+        # |raw|  →  scaled  →  softmax
+        scores = torch.sqrt(raw_re * raw_re + raw_im * raw_im + 1e-12) / math.sqrt(self.d_head)
         if mask is not None:
             scores = scores.masked_fill(mask.unsqueeze(1), float("-inf"))
-        attn = F.softmax(scores, dim=-1)
+        attn = F.softmax(scores, dim=-1)   # real (B, H, T, T)
 
-        # Real attention weights × complex V
-        attn_c = attn.to(V.dtype)
-        out = torch.einsum("bhij,bhjd->bhid", attn_c, V)
+        # attn @ V per real/imag component
+        V_re, V_im = V.real, V.imag
+        out_re = torch.einsum("bhij,bhjd->bhid", attn, V_re)
+        out_im = torch.einsum("bhij,bhjd->bhid", attn, V_im)
+        out = torch.complex(out_re, out_im)                       # (B, H, T, d_h) cfloat
         out = out.transpose(1, 2).contiguous().view(B, T, D)
         return self.out_proj(out)
 
@@ -211,9 +281,15 @@ class ComplexAttention(nn.Module):
 # Tests
 # ---------------------------------------------------------------------------
 def _pick_device() -> str:
-    # MPS cfloat support is incomplete (June 2026) — prefer CUDA, fall back
-    # to CPU. Avoid MPS even if available.
-    return "cuda" if torch.cuda.is_available() else "cpu"
+    # Priority: CUDA > MPS > CPU.
+    # MPS works for everything in this file because each module avoids
+    # complex-tensor heavy ops (the math is done in real space, complex
+    # tensors are only constructed at module boundaries).
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 def _test_complex_linear(device: str) -> None:
@@ -240,6 +316,26 @@ def _test_complex_lift(device: str) -> None:
     # W_imag is small but non-zero → Im(z) non-trivial
     assert z.imag.abs().mean() > 0, "W_imag should be non-zero at init"
     print(f"    ok — Re(z) ≈ h, mean |Im(z)| = {z.imag.abs().mean().item():.4f}")
+
+
+def _test_positional_encoding(device: str) -> None:
+    print("[test] ComplexPositionalEncoding ...")
+    pe = ComplexPositionalEncoding(d_model=16, max_len=64).to(device)
+    z = torch.randn(2, 10, 16, dtype=torch.cfloat, device=device)
+    out = pe(z)
+    assert out.shape == z.shape and out.dtype == torch.cfloat
+    # Amplitude preserved exactly (unit-modulus rotation)
+    assert torch.allclose(out.abs(), z.abs(), atol=1e-4), "PE changed amplitude"
+    # Position 0 unchanged (theta = 0 → rotation = identity)
+    assert torch.allclose(out[:, 0], z[:, 0], atol=1e-5), "PE changed position 0"
+    # Later positions DID rotate in phase
+    assert not torch.allclose(out[:, 5], z[:, 5], atol=1e-3), (
+        "PE did not change later positions"
+    )
+    # Phase difference between pos 0 and pos 5 should be non-trivial
+    drift = (out[:, 5] / (out[:, 5].abs() + 1e-6)
+             * (z[:, 5] / (z[:, 5].abs() + 1e-6)).conj()).angle().abs().mean()
+    print(f"    ok — amplitude preserved, mean phase drift pos5 = {drift.item():.3f} rad")
 
 
 def _test_modrelu(device: str) -> None:
@@ -301,10 +397,13 @@ def main() -> None:
     device = _pick_device()
     print(f"[device] {device}")
     if device == "cpu":
-        print("[warn]  running on CPU — slow. For real workloads use CUDA (Colab T4).")
+        print("[warn]  running on CPU — slow. Prefer CUDA (Colab) or MPS (Apple Silicon).")
+    elif device == "mps":
+        print("[info]  running on Apple Silicon MPS. Real-only complex math path.")
     print()
     _test_complex_linear(device)
     _test_complex_lift(device)
+    _test_positional_encoding(device)
     _test_modrelu(device)
     _test_magnitude_ln(device)
     _test_complex_attention(device)

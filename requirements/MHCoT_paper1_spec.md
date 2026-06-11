@@ -2,9 +2,37 @@
 
 **Multi-Helical Chain-of-Thought: Parallel Complex Reasoning Chains with Phase-Separated Coupling**
 
-Version 1.0 — Realistic scope, designed for one-paper publication. The full
+Version 1.4 — Realistic scope, designed for one-paper publication. The full
 AGI/embodied vision is deferred to future papers and explicitly excluded
 from this spec.
+
+> **Changelog**
+> v1.0 → Initial paper-1 spec (encoder framing, GSM8K, ε-helix, SAE)
+> v1.1 → Added §3.5: the two chain-init strategies (Option 3 candidate-init,
+>        done first; Option 1 ε-helix phase-init, done after), the experiment
+>        ordering (Experiment 0 first), the reasoning for why the ε-helix lives
+>        in Option 1 (not at candidates/aggregation), and the Paper-2 future
+>        unification (natural diversity early + ε-maintained diversity deep).
+>        Updated §6 experiments and §7 file structure + GoT cache schema to
+>        match the actual implemented code (got_runner produces full artifacts).
+> v1.2 → Added the candidate-structure-first plan: §3.5 now measures ε
+>        EMPIRICALLY from natural candidate diversity (ε is no longer a guess),
+>        and splits "why did the LLM reason this way" into Tier 1 (descriptive,
+>        now) vs Tier 2 (mechanistic SAE, later). Added Experiment −1 (candidate
+>        structure, no training, GATE 1′) as the true first step. Added §6.5
+>        Build & Run Manifest: every file, its purpose, run order, and the
+>        critical-path gate diagram.
+> v1.3 → Added §4.5 (all training objectives grouped: Group 1 develops the
+>        embedding via L_contrast/L_task, Group 2 builds the helix via
+>        L_ε/L_wave, Group 3 interprets via SAE; clustering = analysis only,
+>        never develops). Added §8 "why the backbone is frozen" rationale +
+>        M3 feasibility. Added main/encoder.py (frozen-backbone hidden-state
+>        precompute) to the manifest.
+> v1.4 → Added §3.6 "how thoughts become numbers": no tokenizer / no
+>        thought-vocabulary is built; the only tokenizer is DeepSeek's borrowed
+>        subword BPE; meaning is COMPUTED by the frozen LLM (not looked up); a
+>        thought-vocabulary is impossible (thoughts are infinite/compositional);
+>        the "vocabulary of reasoning concepts" is EMERGENT via the SAE.
 
 ---
 
@@ -220,6 +248,185 @@ For paper 1 (small, T4-runnable):
 
 ---
 
+## 3.5 Two chain-initialization strategies — Option 3 and Option 1
+
+A GoT run produces both *multiple candidate reasoning chains* (from Generate)
+and *one distilled final node* (from Improve). This gives us two distinct ways
+to initialize the N chains that MHCoT processes. We pursue them in a deliberate
+order, and they form a two-act research narrative.
+
+### Where the N chains come from — the two options
+
+| | **Option 3 (do FIRST)** | **Option 1 (do AFTER)** |
+|---|---|---|
+| Chains initialized from | Different GoT **candidates** | Phase-shifts of the single **final node** |
+| Source of diversity | **Natural** — the inputs genuinely differ | **ε-induced** — the phase law manufactures it |
+| ε-helix used? | **No** | **Yes — fully** (the core novelty lives here) |
+| Interference granularity | **Pooled, per-problem** (candidates have different lengths) | **Per-token I(t)** (chains are token-aligned) |
+| What it proves | "Interference between genuinely different reasoning predicts correctness" — establishes the mechanism | "The ε-helix recovers a comparable signal from ONE node — efficient and elegant" — the contribution |
+
+### Why this order — Act 1 de-risks Act 2
+
+```
+ACT 1  (Option 3):  Show interference between different GoT candidates
+                    predicts correctness. Signal is real and strong.
+                    → Establishes that the interference mechanism is meaningful.
+
+ACT 2  (Option 1):  Show the ε-helix manufactures useful diversity from a
+                    SINGLE node, recovering a comparable calibration signal
+                    without needing multiple candidates.
+                    → This is the novelty (phase-separation constraint).
+```
+
+A reviewer asking "why should phase-separated chains carry useful information?"
+is answered by Act 1: because interference between reasoning chains
+*demonstrably* works, and the ε-helix is how we obtain that signal cheaply,
+from one node, in a parameter-efficient way.
+
+### Why the ε-helix belongs in Option 1, NOT in the candidates/aggregation
+
+The ε-helix enforces phase-separation between chains that **share an origin**
+— its meaning is "two interpretations of one thing, kept diverse." That only
+makes sense when the chains start from a common point.
+
+| Placement | Chains share an origin? | ε-helix fits? |
+|---|---|---|
+| At candidates (Generate output) | No — genuinely different texts | ❌ already maximally different; no common origin to diverge from |
+| At aggregation (merging candidates) | Happens in **text space** inside GoT | ❌ nothing complex to constrain yet |
+| At the final node (Option 1) | Yes — one node → phase-shifted chains | ✅ **its natural home** |
+
+So Option 3 and the ε-helix do **not** compete for the same architectural
+slot. Option 3 uses natural diversity (different candidates); Option 1 uses
+ε-induced diversity (phase-shifted single node). The novelty is fully
+preserved — it simply lives in Act 2.
+
+### What transfers from Option 3 → Option 1
+
+- ✅ The **validated mechanism** ("interference predicts correctness")
+- ✅ The **shared complex machinery** (`ComplexLift`, `ComplexAttention`,
+  encoder layers) — Option 1 can **warm-start** from Option 3's weights
+- ✅ The **interference concept** (`Ψ = Σψ, I = |Ψ|²`), pooled vs per-token
+
+Does NOT transfer (and need not):
+- Chain initialization (different-candidates → phase-shift): swapped in fresh
+- The `L_ε` loss: Option 1 adds it; Option 3 never had it
+
+Concretely, **"tuning Option 3 into Option 1"** = keep the complex encoder,
+swap chain-init to phase-shifted-single-node, add the `L_ε` loss.
+
+### Data requirement (already satisfied)
+
+Both options are served by the GoT cache produced by `preprocess_got.py`:
+- `candidates` (list of distinct reasoning chains + scores) → feeds Option 3
+- `final_node` (distilled output) → feeds Option 1
+
+Saving both costs nothing extra and keeps both acts open. The critical
+preprocessing check is that the `candidates` are genuinely **distinct**
+(if Generate's sampling collapses them to identical text, Option 3 has no
+signal — verify on the smoke test before scaling).
+
+### Measuring ε from natural diversity — making the helix principled
+
+The weakest point of Option 1, and the question a reviewer will attack, is:
+*"why should rotating phase by ε produce **meaningful** diversity rather than
+noise, and why ε = 0.25?"* Right now ε_min is a guess.
+
+We answer this empirically, **before** building Option 1, using the
+candidates we already cache. The candidates are *natural* reasoning diversity
+— same LLM, same problem, genuinely different chains. So:
+
+1. Lift each candidate to complex space (the same `ComplexLift`).
+2. Measure the **phase gap between candidate representations** — this is the
+   empirical scale of real reasoning divergence the LLM exhibits.
+3. Set ε_min to match that measured scale.
+
+Then Option 1's ε-helix is no longer arbitrary — it is calibrated to
+reproduce the diversity scale the LLM actually exhibits in its own reasoning.
+This mirrors the original spec's biological idea (measure ε from connectome
+inter-circuit phase gaps), but uses the LLM's own reasoning diversity, which
+is more defensible and immediately available from the cache.
+
+This is also the **empirical bridge** from Option 3 → Option 1: characterize
+the structure and scale of natural diversity (Option 3 data), then show the
+ε-helix reproduces it from a single node (Option 1).
+
+**Two tiers of "why did the LLM reason this way":**
+- **Tier 1 (now, on the critical path):** *descriptive* — pairwise candidate
+  distances, clustering by final answer, where chains diverge (early framing
+  vs late arithmetic), and the natural phase scale that sets ε. No training.
+- **Tier 2 (Phase 3, later):** *mechanistic* — SAE features, causal tracing,
+  which circuits drove each reasoning style. A research program on its own;
+  do NOT start until Option 1 shows signal.
+
+### The future unification (Paper 2 — do NOT build for Paper 1)
+
+There is an elegant way to use **both** kinds of diversity in a single
+architecture:
+
+```
+lift each candidate to complex space        ← natural diversity (Option 3)
+        ↓
+aggregate them via interference:  Ψ = Σ_c z_c   ← consensus signal
+        ↓
+spawn ε-helix phase-chains from that consensus  ← maintained diversity (Option 1)
+        ↓
+deep complex processing (soliton coupling, etc.)
+```
+
+Natural diversity early, ε-maintained diversity deep. This uses everything —
+the candidates, the interference, the ε-helix, the soliton coupling — in one
+coherent two-stage structure. It is the natural endpoint of this line of work
+and a strong Paper 2 architecture. **Explicitly out of scope for Paper 1.**
+We note it here only to record where the design leads.
+
+## 3.6 How thoughts become numbers — NO tokenizer, NO thought-vocabulary
+
+A recurring question: do we build a tokenizer / a "vocabulary at the thought
+level" to encode reasoning candidates? **No. We build neither.** This section
+records why, because it is central to the architecture.
+
+**Tokenization is borrowed, at the subword level only.**
+```
+candidate text → DeepSeek subword tokenizer (~150k BPE vocab, borrowed)
+              → token IDs
+              → frozen DeepSeek forward pass
+              → hidden states  ∈ ℝ^(T×D)      ← THE MEANING IS COMPUTED HERE
+              → pool → reasoning fingerprint ∈ ℝᴰ
+              → ComplexLift → ℂᴰ
+```
+The only tokenizer is DeepSeek's existing subword BPE tokenizer (used in
+`main/encoder.py`). We never build, train, or modify a tokenizer.
+
+**Meaning is COMPUTED, not looked up.**
+There is no lookup table `thought → vector`. That is the pre-2018 word2vec
+paradigm (static per-word vectors). The modern paradigm we use COMPUTES the
+representation of a span dynamically by running its subword tokens through the
+transformer. The pooled hidden state IS the numeric representation of the
+thought — produced by the frozen LLM, not retrieved from a thought-vocabulary.
+
+**A thought-level vocabulary is impossible anyway.**
+Subwords are finite and enumerable (~150k). Thoughts are infinite and
+compositional — there is no finite list of "all reasoning steps." This is
+exactly why the field moved from lookup to computation.
+
+**The "vocabulary of reasoning concepts" is EMERGENT, via the SAE.**
+The legitimate goal behind the question — a set of interpretable units that
+say *which reasoning type this is and why it happened* — is real, and it is
+delivered by the Sparse Autoencoder (Stage E). The SAE learns a sparse,
+interpretable feature basis DISCOVERED from the computed representations. That
+discovered basis is the closest thing to a "vocabulary of reasoning concepts,"
+but it is a RESULT (emergent, learned from data, after representations exist),
+not an INPUT (pre-defined, looked up, before tokenization).
+
+| What you might want | How it is actually provided |
+|---|---|
+| numeric representation of a thought | computed by frozen DeepSeek (pooled hidden state) |
+| distinguish reasoning types | geometry of those representations (distances/clustering, Exp −1) |
+| which thoughts are similar & why | distances + interference in representation space |
+| "what made this reasoning happen" | SAE features (Stage E) — emergent, not pre-built |
+
+---
+
 ## 4. Mathematics (only what we'll implement)
 
 We trim the full spec's 9 equations down to the 5 we actually need.
@@ -280,6 +487,47 @@ Staged loss introduction (paper 1):
 - Steps 5K+:   + L_wave (calibrate interference)
 - SAE training is a SEPARATE phase after main model converges.
 
+### 4.5 All training objectives, grouped by stage
+
+Three groups, used at different stages. Group 1 *develops* the embedding;
+Group 2 *builds* the helix; Group 3 *interprets* it.
+
+**Group 1 — Develop the embedding (Stage C, Option 3).** Shapes the complex
+representation so phase becomes meaningful (the word2vec-analog).
+
+| Objective | Sketch | Role |
+|---|---|---|
+| **L_contrast** | InfoNCE/triplet: pull together candidates with the SAME final answer, push apart different | PRIMARY embedding-developer. Organizes complex space by reasoning outcome. Uses the answer as a free grouping signal — no manual labels. Makes phase meaningful. |
+| **L_task** | `BCE(score, label)`, label = reaches gold | Supervised correctness signal. |
+
+**Group 2 — Shape the helix (Stage D, Option 1).** The MHCoT-specific novelty.
+
+| Objective | Formula | Role |
+|---|---|---|
+| **L_task** | `BCE(score, label)` | Correctness supervision (carried over) |
+| **L_ε** | `max(0, ε_min − ‖φ⁰−φ¹‖)²` | The core novelty — phase-separation ≥ ε_min. Uses the ε MEASURED in Experiment −1, not a guess. |
+| **L_wave** | `−E[I·correct] + E[I·wrong]` | Makes interference I(t) a calibrated confidence signal. |
+
+Combined: `L = L_task + λ_ε·L_ε + λ_wave·L_wave`, introduced staged.
+
+**Group 3 — Interpretability (Stage E, SEPARATE training).** Trained after the
+main model converges, on its frozen hidden states.
+
+| Objective | Formula | Role |
+|---|---|---|
+| **L_recon** | `‖h − decode(encode(h))‖²` | SAE reconstructs chain hidden states |
+| **L_sparse** | `λ·‖encode(h)‖₁` | Forces sparse interpretable features |
+
+**Deferred:** `L_dim` (thought-tensor entropy, prevents dimensional collapse)
+— trimmed for Paper 1; add only if collapse is observed.
+
+**On classical methods (k-means, PCA, clustering):** these are ANALYSIS tools
+applied AFTER embeddings exist — they read structure, they do not develop it.
+The embedding is developed by Group 1 objectives (representation learning).
+Clustering is used twice: on the untrained lift (Exp −1a, baseline) and on the
+trained lift (Exp −1b, meaningful reasoning modes). It never trains the
+embedding; the contrastive objective does.
+
 ---
 
 ## 5. Datasets
@@ -303,9 +551,53 @@ arc   = load_dataset("ai2_arc", "ARC-Challenge", split="test")  # 1172 problems
 
 ## 6. Experiments
 
-### Experiment 1 — Architecture validation (the main result)
+**Experiment ordering:** Experiment −1 (candidate structure) runs FIRST — it
+is pure analysis, needs no training, and produces the measured ε plus the
+first correctness signal. Then Experiment 0 (Option 3 interference), then
+Experiments 1–5 (Option 1, the ε-helix design).
 
-Train MHCoT (N=2 complex chains) on GSM8K. Measure:
+### Experiment −1 — Candidate structure analysis (do FIRST, no training)
+
+Characterize the diversity *inside* each GoT node before modeling anything.
+For each problem's N candidates, encode each through the frozen backbone and:
+
+1. **Pairwise distance:** cosine distance between candidate representations;
+   do candidates that reach the *same* final answer cluster together?
+2. **Divergence location:** where in the sequence do candidates split —
+   early (framing) or late (arithmetic)?
+3. **Diversity vs correctness:** tightly-clustered candidates → more often
+   correct? Spread-out candidates → the LLM is "unsure" → more often wrong?
+4. **Measure natural ε:** lift candidates to complex space, measure the phase
+   gap between them → this is the empirical ε_min for Option 1.
+
+- Outputs: distance/clustering plots, divergence histograms, the measured ε.
+- **GATE 1′:** Are candidates distinct in *representation* space (not just
+  surface text)? Does diversity relate to correctness?
+  - Yes → diversity is real, ε is measurable, both options alive; proceed.
+  - No (candidates collapse to near-identical representations) → critical
+    early warning that Option 3 AND Option 1 stand on sand. Stop and diagnose.
+
+This experiment shares all its infrastructure with Experiment 0 (same loading,
+same encoding, same lift) — it is a richer first pass, not a detour.
+
+### Experiment 0 — Option 3: cross-candidate interference
+
+Initialize the N chains from **different GoT candidates** (not phase-shifts).
+Pool each candidate to a fixed-size complex summary, compute pooled
+interference, and test whether it predicts correctness.
+
+- Signal: pooled `I = |Σ_c pool(z_c)|²` per problem
+- Metric: AUC of `I` as predictor of whether the candidates' consensus answer
+  is correct
+- Label source: does the GoT candidate set lead to the gold answer?
+- No ε-helix here (chains are already maximally diverse)
+
+**Decision gate:** if AUC > 0.65, the interference mechanism is real → proceed
+to Option 1 with confidence. If AUC ≈ 0.5, diagnose before building Option 1.
+
+### Experiment 1 — Option 1 / Architecture validation (the main result)
+
+Train MHCoT (N=2 complex chains, ε-helix) on GSM8K. Measure:
 - Answer accuracy
 - Calibration: ECE (Expected Calibration Error) using I(t) at answer token
 - AUC of I(t) as predictor of correctness
@@ -360,42 +652,169 @@ contribution.
 
 ---
 
+## 6.5 Build & Run Manifest — every file, its purpose, the order
+
+This is the single source of truth for *what to build, what to run, and why*.
+Status: ✅ done · 🔜 next · ⬜ later.
+
+### Stage A — Data (produce the GoT nodes)
+
+| File | Run? | Purpose / what it adds |
+|---|---|---|
+| ✅ `main/got_runner.py` | run for 1-problem smoke test | Besta GoT + local DeepSeek backend. `run_got_full()` returns candidates + scores + aggregated + final_node. Verifies the pipeline on one problem. |
+| ✅ `main/preprocess_got.py` | **run for the dataset** | Batch GoT over GSM8K, resumable. Writes `data/got_cache/gsm8k_test.jsonl`. **This produces the dataset everything else consumes.** |
+
+Run order: `got_runner.py` (verify) → `preprocess_got.py --limit 605` (produce).
+
+### Stage B — Foundation (the complex primitives)
+
+| File | Run? | Purpose / what it adds |
+|---|---|---|
+| ✅ `main/complex_ops.py` | run its self-test | ComplexLinear, ComplexLift, ComplexPositionalEncoding, modReLU, MagnitudeLN, ComplexAttention. The reusable building blocks. MPS-safe, unit-tested. |
+
+### Stage C — Analysis FIRST (no training — the cheap gates)
+
+| File | Run? | Purpose / what it adds |
+|---|---|---|
+| 🔜 `main/data.py` | imported by experiments | Loads the cache, extracts each candidate/node's predicted answer, compares to gold → **correctness labels**. The bridge from raw text to a trainable dataset. Gates everything. |
+| 🔜 `main/encoder.py` | **run once to precompute** | Text → frozen DeepSeek → hidden states `H ∈ ℝ^(T×D)`, **cached to disk**. The frozen-backbone-precompute trick: run the 1.5B model ONCE, then all training reuses the cache. This is what makes M3 training fast (~30-60 min one-time, then the backbone is out of the loop). |
+| 🔜 `experiments/exp_candidate_structure.py` | **run — Experiment −1** | Encodes candidates (via cached H), measures pairwise distance/clustering (k-means)/divergence, **measures the natural ε**, correlates diversity with correctness. Two passes: −1a untrained lift (baseline), −1b trained lift (meaningful). → **GATE 1′**. Pure analysis. |
+| 🔜 `experiments/exp0_option3.py` | **run — Experiment 0** | Pooled interference between candidates → AUC vs correctness. → **GATE 1** (does interference predict correctness?). Untrained probe first, then trained lift. |
+
+### Stage D — Option 1 model (the ε-helix novelty — build only after gates pass)
+
+| File | Run? | Purpose / what it adds |
+|---|---|---|
+| ⬜ `main/soliton.py` | run its self-test | SolitonCell (cross-chain coupling, EQ-C) + `L_ε` helix loss. Uses the ε measured in Experiment −1. |
+| ⬜ `main/model.py` | imported by training | `MHCoTEncoder`: assembles lift → posenc → phase-init N=2 → Stage1 (attn+modReLU) → Stage2 (attn+soliton) → interference + scoring head. |
+| ⬜ `main/losses.py` | imported by training | `L_task` (BCE on correctness) + `L_ε` + `L_wave`. |
+| ⬜ `experiments/exp1_main.py` | **run — Experiment 1** | Train Option 1 on final_nodes, N=2 phase-shifted chains, ε-helix. Measure per-token I(t), calibration AUC, ECE. → **GATE 3**. |
+| ⬜ `experiments/exp5_ablation.py` | run — Experiment 5 | N=1 + real-valued ablation at matched params. Answers "does complex help?" |
+
+### Stage E — Interpretability + breadth (the second contribution)
+
+| File | Run? | Purpose / what it adds |
+|---|---|---|
+| ⬜ `main/sae.py` | imported by exp4 | Sparse autoencoder for per-chain feature analysis (Tier 2). |
+| ⬜ `experiments/exp4_sae.py` | run — Experiment 4 | Per-chain features, agreement/disagreement features, feature steering. |
+| ⬜ `experiments/exp2_calibration.py` | run — Experiment 2 | ECE + calibration curves vs SC's vote-confidence. |
+| ⬜ `experiments/exp3_transfer.py` | run — Experiment 3 | Train GSM8K, test zero-shot on Game-of-24 / ARC. |
+
+### The critical path (what actually gates the project)
+
+```
+preprocess_got.py  →  data.py  →  exp_candidate_structure.py   [GATE 1′]
+                                          ↓ (if diversity real)
+                                   exp0_option3.py              [GATE 1]
+                                          ↓ (if interference predicts correctness)
+                          soliton.py + model.py + losses.py
+                                          ↓
+                                   exp1_main.py                 [GATE 3]
+                                          ↓ (if ε-helix recovers signal)
+                              sae.py + remaining experiments → arXiv v1
+```
+
+Each gate is go/no-go. We build heavy machinery (Stage D) only after the
+cheap analysis (Stage C) shows signal — the same falsification discipline
+that killed the wasteful LLM-decoration path early.
+
+---
+
 ## 7. Implementation plan — file structure
+
+Actual current layout (code lives under `main/`):
 
 ```
 MHCoT/
-├── mhcot/
+├── main/
 │   ├── __init__.py
-│   ├── config.py            # MHCoTConfig dataclass — all hyperparams
-│   ├── got_runner.py        # NEW: wraps Besta GoT, caches outputs to disk
-│   ├── complex_ops.py       # ComplexLift, modReLU, MagnitudeLN, ComplexAttention
-│   ├── soliton.py           # SolitonCell (EQ-C)
-│   ├── model.py             # MHCoTHead — the full complex stack on top of backbone
-│   ├── losses.py            # L_task, L_ε, L_wave (EQ-E)
-│   ├── sae.py               # Sparse autoencoder for per-chain analysis
-│   └── data.py              # GSM8K/Game24/ARC loaders + answer extraction
-├── preprocess_got.py        # NEW: run Besta GoT on training/test sets, save to disk
-├── train.py                 # main training loop (consumes cached GoT outputs)
-├── evaluate.py              # benchmark runner
+│   ├── got_runner.py        # ✅ DONE: Besta GoT + local DeepSeek backend.
+│   │                        #    run_got_full() returns GoTArtifacts (candidates
+│   │                        #    + scores + aggregated + final_node).
+│   ├── preprocess_got.py    # ✅ DONE: batch GoT over GSM8K, resumable, caches
+│   │                        #    full artifacts to data/got_cache/*.jsonl
+│   ├── complex_ops.py       # ✅ DONE: ComplexLinear, ComplexLift,
+│   │                        #    ComplexPositionalEncoding, modReLU,
+│   │                        #    MagnitudeLN, ComplexAttention (all MPS-safe,
+│   │                        #    all unit-tested)
+│   ├── soliton.py           # TODO: SolitonCell (EQ-C) + L_ε helix loss
+│   ├── model.py             # TODO: MHCoTEncoder (assembles the primitives)
+│   ├── losses.py            # TODO: L_task, L_ε, L_wave (EQ-E)
+│   ├── sae.py               # TODO: sparse autoencoder for per-chain analysis
+│   └── data.py              # TODO: cache loaders + answer extraction
 ├── experiments/
-│   ├── exp1_main.py         # Experiment 1 — architecture validation
-│   ├── exp2_calibration.py  # Experiment 2 — ECE + calibration curves
-│   ├── exp3_transfer.py     # Experiment 3 — cross-benchmark
-│   ├── exp4_sae.py          # Experiment 4 — SAE interpretability
-│   └── exp5_ablation.py     # Experiment 5 — N=1 sanity check
-├── results/                 # CSVs, JSON summaries, plots (gitignored)
-├── colab/
-│   └── train_colab.ipynb    # one-cell Colab runner
-├── MHCoT_paper1_spec.md     # this document
-├── README.md
+│   ├── exp0_option3.py      # TODO: Experiment 0 — cross-candidate interference
+│   ├── exp1_main.py         # TODO: Experiment 1 — Option 1 validation
+│   ├── exp2_calibration.py  # TODO: ECE + calibration curves
+│   ├── exp3_transfer.py     # TODO: cross-benchmark
+│   ├── exp4_sae.py          # TODO: SAE interpretability
+│   └── exp5_ablation.py     # TODO: N=1 sanity check
+├── data/got_cache/          # GoT artifacts (gitignored except milestones)
+├── colab/                   # Colab notebooks
+├── requirements/MHCoT_paper1_spec.md   # this document
+├── setup_m3.sh              # ✅ DONE: one-shot M3 conda env rebuild
+├── constraints.txt          # pinned versions (torch/numpy frozen)
 └── requirements.txt
+```
+
+### GoT cache schema (`data/got_cache/gsm8k_{split}.jsonl`)
+
+One JSON object per line:
+
+```
+{
+  "idx":          int,
+  "problem":      str,
+  "gold":         str,
+  "candidates":   [{"text": str, "score": float|null}, ...],  # → Option 3
+  "kept":         [str, ...],
+  "aggregated":   str|null,
+  "final_node":   str,                                        # → Option 1
+  "thought_nodes":[str],         # = [final_node]  (back-compat)
+  "scores":       [float|null],
+  "phases":       [str],
+  "wall_seconds": float,
+  "error":        str            # only present on failure
+}
 ```
 
 ---
 
 ## 8. Training procedure
 
-**Hardware target:** single T4 (Colab free) or single A100 (Colab Pro).
+### Why the DeepSeek backbone is FROZEN (and what we actually train)
+
+We never fine-tune the 1.5B backbone. Only the ~35M-param head trains
+(ComplexLift ~4.7M + 4 complex layers ~30M). Reasons, principled first:
+
+1. **Clean attribution (decisive).** With the backbone frozen, ANY calibration
+   gain is unambiguously from MHCoT (lift + helix + interference), not from a
+   better-tuned language model. A frozen backbone IS the experimental control.
+   Fine-tuning would let a reviewer say "maybe the gains are just fine-tuning."
+2. **The research question is about MHCoT, not the backbone.** We test the
+   processing layer on top of a fixed representation; we are not building a
+   better LLM. DeepSeek-R1-Distill already reasons well.
+3. **Standard probing methodology.** Freeze a model, train a small head on its
+   representations — the correct design for "what can complex multi-helical
+   processing extract from a fixed representation?"
+4. **Precompute efficiency (the M3 enabler).** Frozen ⇒ run each candidate
+   through the backbone ONCE, cache hidden states to disk, train the 35M head
+   on the cache forever. The giant model never sits in the training loop.
+5. **Reproducibility.** A public frozen checkpoint is fully reproducible.
+
+We would freeze it even on an H100 for Paper 1. LoRA (small adapter, ~1-5M
+params, feasible even on M3) is the future option ONCE the mechanism is
+proven — a Paper 2 optimization, deliberately out of scope here.
+
+### Can it train on M3? Yes.
+
+Trainable surface is ~35M params (~0.5GB incl. grads + Adam). With cached
+hidden states the backbone is out of the loop, so a full run (a few epochs
+over ~1815 candidate sequences) is ~10-30 min on MPS. `complex_ops.py` is
+real-decomposed and its gradient tests pass on MPS. What is NOT feasible on
+M3 — full fine-tuning of the 1.5B backbone — is exactly what we don't do.
+
+**Hardware target:** M3 MPS (Paper 1 head training) · T4/A100 (optional speedup).
 
 **Schedule:**
 - **Phase 0 — Warmup (steps 0-500):** L_task only, learning rate 5e-5,

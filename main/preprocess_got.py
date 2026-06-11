@@ -53,7 +53,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from datasets import load_dataset
 from tqdm import tqdm
 
-from got_runner import run_got_on_problem
+from got_runner import run_got_full
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +128,7 @@ def main() -> int:
             t0 = time.time()
 
             try:
-                nodes = run_got_on_problem(
+                art = run_got_full(
                     problem,
                     num_initial=args.num_initial,
                     num_keep=args.num_keep,
@@ -140,8 +140,9 @@ def main() -> int:
                 # Write a placeholder so we can analyze failures later
                 record = {
                     "idx": idx, "problem": problem, "gold": gold,
-                    "thought_nodes": [], "scores": [], "phases": [],
-                    "wall_seconds": time.time() - t0, "error": err,
+                    "candidates": [], "kept": [], "aggregated": None,
+                    "final_node": "", "thought_nodes": [], "scores": [],
+                    "phases": [], "wall_seconds": time.time() - t0, "error": err,
                 }
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
                 f.flush()
@@ -151,9 +152,16 @@ def main() -> int:
                 "idx": idx,
                 "problem": problem,
                 "gold": gold,
-                "thought_nodes": [n.text for n in nodes],
-                "scores": [n.score for n in nodes],
-                "phases": [n.phase for n in nodes],
+                # full graph artifacts (for Option 3 — candidate-init chains)
+                "candidates": art.candidates,
+                "kept": art.kept,
+                "aggregated": art.aggregated,
+                # the distilled node (for Option 1 — phase-shifted chains)
+                "final_node": art.final_node,
+                # backward-compatible fields
+                "thought_nodes": [art.final_node] if art.final_node else [],
+                "scores": [art.final_score],
+                "phases": ["improved"],
                 "wall_seconds": time.time() - t0,
             }
             f.write(json.dumps(record, ensure_ascii=False) + "\n")

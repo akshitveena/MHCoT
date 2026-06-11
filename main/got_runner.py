@@ -177,10 +177,12 @@ class GSM8KPrompter(prompter.Prompter):
     def score_prompt(self, state_dicts: list[dict], **kwargs) -> str:
         s = state_dicts[0]
         return (
-            f"Rate the following math reasoning on a scale of 1-10 for "
-            f"correctness and clarity. Respond with ONLY the number.\n\n"
+            f"Rate the following math reasoning for correctness and clarity. "
+            f"After any thinking, end your reply with the exact line "
+            f"'Score: X/10' where X is a number from 1 to 10.\n\n"
             f"Problem: {s.get('original', '')}\n"
-            f"Reasoning:\n{s.get('current', '')}\n\nScore (1-10):"
+            f"Reasoning:\n{s.get('current', '')}\n\n"
+            f"Finish with 'Score: X/10'."
         )
 
     def aggregation_prompt(self, state_dicts: list[dict], **kwargs) -> str:
@@ -220,19 +222,53 @@ class GSM8KParser(parser.Parser):
     def parse_improve_answer(self, state: dict, texts: list[str]) -> dict:
         return {**state, "current": texts[0].strip(), "phase": "improved"}
 
+    @staticmethod
+    def _extract_score(text: str) -> float:
+        """
+        Robustly pull a 1-10 quality score from a DeepSeek-R1-Distill response.
+
+        The naive 'first number' approach fails because the model emits a
+        <think>...</think> block that cites the PROBLEM's numbers (e.g. "16
+        eggs"), so the first number is never the score. Strategy:
+          1. Drop the <think> block — the score lives in the final answer.
+          2. Prefer explicit 'X/10' or 'X out of 10' patterns.
+          3. Then 'Score: X' / 'rating: X' patterns.
+          4. Fall back to the LAST number that lies in [0, 10].
+          5. Default to a neutral 5.0 if nothing usable is found.
+        Result is always clamped to [0, 10].
+        """
+        # 1. Strip the internal monologue
+        if "</think>" in text:
+            text = text.split("</think>")[-1]
+
+        def _clamp(v: float) -> float:
+            return max(0.0, min(10.0, v))
+
+        # 2. 'X/10' or 'X out of 10'
+        m = re.search(r"(\d+(?:\.\d+)?)\s*(?:/|out\s+of)\s*10", text, re.IGNORECASE)
+        if m:
+            return _clamp(float(m.group(1)))
+
+        # 3. 'Score: X' / 'rating: X' / 'rate: X'
+        m = re.search(r"(?:score|rating|rate)\s*[:=]?\s*(\d+(?:\.\d+)?)",
+                      text, re.IGNORECASE)
+        if m:
+            return _clamp(float(m.group(1)))
+
+        # 4. Last number in [0, 10] within the final answer
+        in_range = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", text)
+                    if 0.0 <= float(x) <= 10.0]
+        if in_range:
+            return in_range[-1]
+
+        # 5. Neutral default
+        return 5.0
+
     def parse_validation_answer(self, state: dict, texts: list[str]) -> bool:
-        try:
-            score = float(re.search(r"-?\d+\.?\d*", texts[0]).group())
-            return score >= 5.0
-        except Exception:
-            return False
+        return self._extract_score(texts[0]) >= 5.0
 
     def parse_score_answer(self, states: list[dict], texts: list[str]) -> list[float]:
-        scores: list[float] = []
-        for t in texts:
-            m = re.search(r"-?\d+\.?\d*", t)
-            scores.append(float(m.group()) if m else 0.0)
-        return scores
+        return [self._extract_score(t) for t in texts]
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +312,101 @@ class ThoughtNode:
     phase: str = "improved"
 
 
+@dataclass
+class GoTArtifacts:
+    """
+    Full record of one GoT graph run — not just the distilled final node.
+    Needed so we can later pursue:
+      * Option 1: phase-shifted chains over `final_node` (the ε-helix design)
+      * Option 3: N chains initialized from different `candidates`
+                  (interference between genuinely different reasoning approaches)
+    Saving candidates costs nothing now and preserves both options.
+    """
+    problem: str
+    candidates: list[dict]              # [{"text": str, "score": float|None}, ...] from Generate
+    kept: list[str]                    # texts that survived KeepBestN
+    aggregated: str | None             # Aggregate output
+    final_node: str                    # Improve output — the distilled node
+    final_score: float | None = None
+
+
+# --- helpers to read text/score out of a Besta "thought" defensively --------
+def _thought_text(th) -> str:
+    state = getattr(th, "state", None)
+    if isinstance(state, dict):
+        return state.get("current", "") or ""
+    return ""
+
+
+def _thought_score(th):
+    s = getattr(th, "score", None)
+    try:
+        return float(s) if s is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_artifacts(graph, problem: str) -> GoTArtifacts:
+    """
+    Walk the graph's operations and pull out per-stage artifacts.
+    Written defensively: any stage that fails to yield thoughts is skipped,
+    so a Besta API quirk degrades gracefully rather than crashing the run.
+    """
+    candidates: list[dict] = []
+    kept: list[str] = []
+    aggregated: str | None = None
+    final_node: str = ""
+    final_score = None
+
+    for op in graph.operations:
+        op_name = type(op).__name__
+        try:
+            thoughts = op.get_thoughts()
+        except Exception:
+            continue
+        if not thoughts:
+            continue
+
+        if op_name == "Generate":
+            candidates = [
+                {"text": _thought_text(t), "score": _thought_score(t)}
+                for t in thoughts
+            ]
+        elif op_name == "Score":
+            # Score attaches scores to the thoughts flowing through it;
+            # align positionally with the candidates if possible.
+            for i, t in enumerate(thoughts):
+                s = _thought_score(t)
+                if i < len(candidates) and s is not None:
+                    candidates[i]["score"] = s
+        elif op_name == "KeepBestN":
+            kept = [_thought_text(t) for t in thoughts]
+        elif op_name == "Aggregate":
+            aggregated = _thought_text(thoughts[0])
+        elif op_name == "Improve":
+            final_node = _thought_text(thoughts[0])
+            final_score = _thought_score(thoughts[0])
+
+    # Fallback: if Improve yielded nothing, use the terminal op's thought
+    if not final_node:
+        try:
+            term = graph.operations[-1].get_thoughts()
+            if term:
+                final_node = _thought_text(term[0])
+                final_score = _thought_score(term[0])
+        except Exception:
+            pass
+
+    return GoTArtifacts(
+        problem=problem,
+        candidates=candidates,
+        kept=kept,
+        aggregated=aggregated,
+        final_node=final_node,
+        final_score=final_score,
+    )
+
+
 _LLM_SINGLETON: LocalDeepSeekLLM | None = None
 
 
@@ -287,14 +418,15 @@ def get_llm() -> LocalDeepSeekLLM:
     return _LLM_SINGLETON
 
 
-def run_got_on_problem(
+def run_got_full(
     problem: str,
     num_initial: int = 3,
     num_keep: int = 2,
-) -> list[ThoughtNode]:
+) -> GoTArtifacts:
     """
-    Run the full Besta GoT pipeline on one problem.
-    Returns the finished thought-node(s) from the terminal operation.
+    Run the full Besta GoT pipeline on one problem and return ALL graph
+    artifacts (candidates + scores + aggregated + final node), not just the
+    distilled output. This is the function preprocessing should call.
     """
     lm = get_llm()
     g = build_gsm8k_graph(num_initial=num_initial, num_keep=num_keep)
@@ -308,21 +440,25 @@ def run_got_on_problem(
         initial_state,
     )
     ctrl.run()
+    return _extract_artifacts(g, problem)
 
-    # The terminal operation holds the finished thoughts
-    terminal = g.operations[-1]
-    final_thoughts = terminal.get_thoughts()
 
-    nodes: list[ThoughtNode] = []
-    for th in final_thoughts:
-        state = th.state if hasattr(th, "state") else {}
-        nodes.append(ThoughtNode(
-            problem=problem,
-            text=state.get("current", ""),
-            score=getattr(th, "score", None),
-            phase=state.get("phase", "improved"),
-        ))
-    return nodes
+def run_got_on_problem(
+    problem: str,
+    num_initial: int = 3,
+    num_keep: int = 2,
+) -> list[ThoughtNode]:
+    """
+    Backward-compatible wrapper — returns just the final node as a list of
+    ThoughtNode. Prefer run_got_full() for new code.
+    """
+    art = run_got_full(problem, num_initial=num_initial, num_keep=num_keep)
+    return [ThoughtNode(
+        problem=problem,
+        text=art.final_node,
+        score=art.final_score,
+        phase="improved",
+    )]
 
 
 # ---------------------------------------------------------------------------
@@ -336,14 +472,26 @@ def _smoke_test() -> None:
         "fresh duck egg. How much in dollars does she make every day?"
     )
     print(f"\n[smoke] problem:\n{problem}\n")
-    nodes = run_got_on_problem(problem, num_initial=3, num_keep=2)
-    print(f"\n[smoke] produced {len(nodes)} thought-node(s).\n")
-    for i, node in enumerate(nodes):
+    art = run_got_full(problem, num_initial=3, num_keep=2)
+    print(f"\n[smoke] captured {len(art.candidates)} candidate(s), "
+          f"{len(art.kept)} kept, aggregated={'yes' if art.aggregated else 'no'}\n")
+    for i, c in enumerate(art.candidates):
         print(f"{'='*70}")
-        print(f"ThoughtNode {i}   score={node.score}   phase={node.phase}")
+        print(f"CANDIDATE {i}   score={c['score']}")
         print(f"{'='*70}")
-        print(node.text[:1500])
+        print(c["text"][:600])
         print()
+    print(f"{'#'*70}")
+    print(f"FINAL NODE   score={art.final_score}")
+    print(f"{'#'*70}")
+    print(art.final_node[:800])
+    print()
+    # The critical check for Option 3: are the candidates actually different?
+    if len(art.candidates) >= 2:
+        a, b = art.candidates[0]["text"], art.candidates[1]["text"]
+        identical = (a.strip() == b.strip())
+        print(f"[check] candidate 0 vs 1 identical? {identical}  "
+              f"(want False — distinct reasoning approaches for Option 3)")
 
 
 if __name__ == "__main__":

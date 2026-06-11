@@ -1,0 +1,12 @@
+{
+  "n_problems": 605,
+  "mean_interference_complex": 0.9502595417509394,
+  "mean_interference_real": 0.9502632037420904,
+  "auc_complex_vs_final": 0.5384771351924637,
+  "auc_complex_vs_consensus": 0.5885270447314243,
+  "auc_real_vs_final": 0.5384459417306132,
+  "auc_real_vs_consensus": 0.5884958512695739,
+  "best_complex_auc": 0.5885270447314243,
+  "gate1_pass": false,
+  "note": "untrained probe; trained Option-3 (contrastive, full dataset) deferred"
+}
