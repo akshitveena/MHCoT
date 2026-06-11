@@ -1,17 +1,17 @@
 {
   "n_problems": 605,
-  "mean_spread": 0.06771814460088768,
-  "auc_spread_final": 0.5384459417306132,
-  "auc_spread_consensus": 0.5884958512695739,
-  "same_answer_mean_dist": 0.05006603657373492,
-  "diff_answer_mean_dist": 0.06115197953458748,
-  "answer_distance_separation": 0.011085942960852559,
-  "natural_eps_mean": 0.7437738809375395,
-  "natural_eps_median": 0.6671231985092163,
-  "pca_explained_var": 0.3977423310279846,
+  "mean_spread": 0.19933353172353477,
+  "auc_spread_final": 0.6052311435523114,
+  "auc_spread_consensus": 0.6891415559298771,
+  "same_answer_mean_dist": 0.15531013802774768,
+  "diff_answer_mean_dist": 0.25734308634882985,
+  "answer_distance_separation": 0.10203294832108217,
+  "natural_eps_mean": 1.1480918630752353,
+  "natural_eps_median": 1.1301344633102417,
+  "pca_explained_var": 0.42082005739212036,
   "kmeans_purity": 0.7261707988980717,
   "gate_distinct": true,
-  "gate_signal": false,
+  "gate_signal": true,
   "gate_same_answer": true,
-  "gate_pass": false
+  "gate_pass": true
 }

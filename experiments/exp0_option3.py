@@ -97,14 +97,16 @@ def safe_auc(y, x):
 
 
 def main() -> None:
-    pooled_path = _PROJECT_ROOT / "data" / "hidden_cache" / "gsm8k_test_pooled.pt"
+    import os
+    POOL = os.environ.get("MHCOT_POOL", "lastk")   # mean | lastk | last
+    pooled_path = _PROJECT_ROOT / "data" / "hidden_cache" / "gsm8k_test_pools.pt"
     if not pooled_path.exists():
-        print(f"[error] pooled cache not found: {pooled_path}")
+        print(f"[error] multi-pool cache not found: {pooled_path}")
         print("        run `python main/encoder.py` first.")
         sys.exit(1)
-    pooled = load_pooled(pooled_path)
+    pooled = load_pooled(pooled_path, pool=POOL)
     records = {r.idx: r for r in load_dataset()}
-    print(f"[exp0] {len(pooled)} problems with pooled vectors")
+    print(f"[exp0] {len(pooled)} problems | POOL = {POOL}")
 
     D = next(iter(pooled.values()))["candidates"].shape[-1]
     torch.manual_seed(0)

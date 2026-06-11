@@ -31,3 +31,7 @@ hf_cache/
 .vscode/
 .idea/
 *.swp
+
+# hidden-state caches (large, regenerable)
+data/hidden_cache/
+*.pt

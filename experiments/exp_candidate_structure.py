@@ -114,13 +114,15 @@ def main() -> None:
     records = load_dataset()
     rec_by_idx = {r.idx: r for r in records}
 
-    pooled_path = _PROJECT_ROOT / "data" / "hidden_cache" / "gsm8k_test_pooled.pt"
+    import os
+    POOL = os.environ.get("MHCOT_POOL", "lastk")   # mean | lastk | last
+    pooled_path = _PROJECT_ROOT / "data" / "hidden_cache" / "gsm8k_test_pools.pt"
     if not pooled_path.exists():
-        print(f"[error] pooled cache not found: {pooled_path}")
+        print(f"[error] multi-pool cache not found: {pooled_path}")
         print("        run `python main/encoder.py` first (after preprocessing).")
         sys.exit(1)
-    pooled = load_pooled(pooled_path)
-    print(f"[exp-1] {len(pooled)} problems with pooled vectors")
+    pooled = load_pooled(pooled_path, pool=POOL)
+    print(f"[exp-1] {len(pooled)} problems | POOL = {POOL}")
 
     # Determine D and an untrained ComplexLift (fixed seed for reproducibility)
     any_e = next(iter(pooled.values()))

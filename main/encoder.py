@@ -96,22 +96,57 @@ def encode_text(text: str, pool: str | None = "mean") -> torch.Tensor:
     return H                                       # (T, D)
 
 
+# Default file for the multi-pool cache (mean / lastk / last)
+MULTIPOOL_PATH = _HIDDEN_DIR / "gsm8k_test_pools.pt"
+LASTK = 16   # answer-region window: mean of the last K tokens
+
+
+@torch.no_grad()
+def encode_text_multi(text: str, lastk: int = LASTK) -> dict:
+    """
+    ONE forward pass → three pooled representations:
+      "mean"  : mean over all tokens          (dilutes the answer — the old way)
+      "lastk" : mean over the last `lastk` tokens (the ANSWER REGION — hypothesis)
+      "last"  : the final token's hidden state (the conclusion)
+    Each is (D,) float on CPU.
+    """
+    model, tok = get_backbone()
+    if not text:
+        D = model.config.hidden_size
+        z = torch.zeros(D)
+        return {"mean": z, "lastk": z, "last": z}
+    ids = tok(text, return_tensors="pt", truncation=True,
+              max_length=MAX_LEN).to(DEVICE)
+    out = model(**ids)
+    H = out.hidden_states[-1].squeeze(0).float().cpu()   # (T, D)
+    T = H.shape[0]
+    k = min(lastk, T)
+    return {
+        "mean": H.mean(dim=0),
+        "lastk": H[-k:].mean(dim=0),
+        "last": H[-1],
+    }
+
+
 # ---------------------------------------------------------------------------
-# Precompute pooled vectors over a dataset
+# Precompute MULTI-pool vectors over a dataset
 # ---------------------------------------------------------------------------
 def precompute_pooled(
     records: list[ProblemRecord],
     out_path: str | Path | None = None,
 ) -> dict:
     """
-    For each record, encode every candidate + the final_node to a pooled
-    vector. Returns and saves a dict:
-        { idx: {"candidates": Tensor(n_cand, D), "final": Tensor(D),
-                "gold": str, "cand_correct": list[bool], "final_correct": bool} }
-    Resumable: if out_path exists, already-done idx are skipped.
+    For each record, encode every candidate + the final_node to THREE pooled
+    vectors (mean / lastk / last) in one forward pass. Saves a dict:
+        { idx: {
+            "candidates": {"mean": (n,D), "lastk": (n,D), "last": (n,D)},
+            "final":      {"mean": (D,),  "lastk": (D,),  "last": (D,)},
+            "gold": str, "cand_correct": list[bool], "final_correct": bool
+        } }
+    Resumable: already-done idx are skipped.
     """
     if out_path is None:
-        out_path = _HIDDEN_DIR / "gsm8k_test_pooled.pt"
+        out_path = MULTIPOOL_PATH
     out_path = Path(out_path)
 
     cache: dict = {}
@@ -121,16 +156,18 @@ def precompute_pooled(
 
     todo = [r for r in records if r.idx not in cache and not r.error and r.candidates]
     print(f"[encoder] to encode: {len(todo)} problems "
-          f"({sum(r.n_candidates + 1 for r in todo)} texts)")
+          f"({sum(r.n_candidates + 1 for r in todo)} texts), pools=mean/lastk/last")
+
+    def stack_pools(dicts: list[dict]) -> dict:
+        return {p: torch.stack([d[p] for d in dicts]) for p in ("mean", "lastk", "last")}
 
     t0 = time.time()
     for n, r in enumerate(todo):
-        cand_vecs = torch.stack([encode_text(c.text, pool="mean")
-                                 for c in r.candidates])           # (n_cand, D)
-        final_vec = encode_text(r.final_text, pool="mean")          # (D,)
+        cand_pools = [encode_text_multi(c.text) for c in r.candidates]
+        final_pools = encode_text_multi(r.final_text)
         cache[r.idx] = {
-            "candidates": cand_vecs,
-            "final": final_vec,
+            "candidates": stack_pools(cand_pools),       # each (n_cand, D)
+            "final": final_pools,                        # each (D,)
             "gold": r.gold,
             "cand_correct": [c.correct for c in r.candidates],
             "final_correct": r.final_correct,
@@ -140,18 +177,35 @@ def precompute_pooled(
             rate = (n + 1) / dt
             eta = (len(todo) - n - 1) / max(rate, 1e-6)
             print(f"  [{n+1}/{len(todo)}] {rate:.2f} prob/s  ETA {eta/60:.1f} min")
-            torch.save(cache, out_path)   # periodic checkpoint
-
+            torch.save(cache, out_path)
     torch.save(cache, out_path)
     print(f"[encoder] done. {len(cache)} problems cached → {out_path}")
     print(f"  elapsed {(time.time()-t0)/60:.1f} min")
     return cache
 
 
-def load_pooled(path: str | Path | None = None) -> dict:
+def load_pooled(path: str | Path | None = None, pool: str = "lastk") -> dict:
+    """
+    Load the multi-pool cache and SELECT one pooling, returning the flat
+    structure the experiments expect:
+        { idx: {"candidates": (n,D), "final": (D,), "gold",
+                "cand_correct", "final_correct"} }
+    `pool` ∈ {"mean", "lastk", "last"}.
+    """
     if path is None:
-        path = _HIDDEN_DIR / "gsm8k_test_pooled.pt"
-    return torch.load(Path(path))
+        path = MULTIPOOL_PATH
+    raw = torch.load(Path(path))
+    assert pool in ("mean", "lastk", "last"), f"bad pool {pool}"
+    out = {}
+    for idx, e in raw.items():
+        # support both the new nested format and (defensively) flat legacy
+        cand = e["candidates"][pool] if isinstance(e["candidates"], dict) else e["candidates"]
+        fin = e["final"][pool] if isinstance(e["final"], dict) else e["final"]
+        out[idx] = {
+            "candidates": cand, "final": fin, "gold": e["gold"],
+            "cand_correct": e["cand_correct"], "final_correct": e["final_correct"],
+        }
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -161,9 +215,9 @@ if __name__ == "__main__":
     records = load_dataset()
     print(f"[encoder] loaded {len(records)} records from GoT cache")
     cache = precompute_pooled(records)
-    # quick sanity
     any_idx = next(iter(cache))
     e = cache[any_idx]
-    print(f"\n[sanity] idx={any_idx}: candidates {tuple(e['candidates'].shape)}, "
-          f"final {tuple(e['final'].shape)}, gold={e['gold']}, "
+    print(f"\n[sanity] idx={any_idx}: "
+          f"candidates.lastk {tuple(e['candidates']['lastk'].shape)}, "
+          f"final.lastk {tuple(e['final']['lastk'].shape)}, gold={e['gold']}, "
           f"cand_correct={e['cand_correct']}")
