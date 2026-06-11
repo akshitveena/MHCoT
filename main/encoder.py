@@ -184,6 +184,58 @@ def precompute_pooled(
     return cache
 
 
+SEQ_PATH = _HIDDEN_DIR / "gsm8k_test_seq.pt"
+
+
+def precompute_sequences(
+    records: list[ProblemRecord],
+    out_path: str | Path | None = None,
+) -> dict:
+    """
+    Cache the FULL per-token hidden-state sequence of each final_node — what
+    Option 1 / the MHCoTEncoder consumes (per-token I(t) needs the sequence,
+    not a pooled vector). Stored fp16 to halve disk.
+        { idx: {"h": (T, D) fp16, "length": int, "label": int (final_correct),
+                "gold": str} }
+    Resumable. ~0.5-1.5 GB for GSM8K test (final_nodes only).
+    """
+    if out_path is None:
+        out_path = SEQ_PATH
+    out_path = Path(out_path)
+
+    cache: dict = {}
+    if out_path.exists():
+        cache = torch.load(out_path)
+        print(f"[encoder] resuming sequences — {len(cache)} idx cached")
+
+    todo = [r for r in records if r.idx not in cache and not r.error and r.final_text]
+    print(f"[encoder] to encode (final_node sequences): {len(todo)}")
+
+    t0 = time.time()
+    for n, r in enumerate(todo):
+        H = encode_text(r.final_text, pool=None)         # (T, D) float
+        cache[r.idx] = {
+            "h": H.half(),                               # fp16 to save disk
+            "length": int(H.shape[0]),
+            "label": int(r.final_correct),
+            "gold": r.gold,
+        }
+        if (n + 1) % 25 == 0 or n == 0:
+            dt = time.time() - t0
+            rate = (n + 1) / dt
+            eta = (len(todo) - n - 1) / max(rate, 1e-6)
+            print(f"  [{n+1}/{len(todo)}] {rate:.2f} prob/s  ETA {eta/60:.1f} min")
+            torch.save(cache, out_path)
+    torch.save(cache, out_path)
+    print(f"[encoder] done. {len(cache)} sequences cached → {out_path}")
+    print(f"  elapsed {(time.time()-t0)/60:.1f} min")
+    return cache
+
+
+def load_sequences(path: str | Path | None = None) -> dict:
+    return torch.load(Path(path) if path else SEQ_PATH)
+
+
 def load_pooled(path: str | Path | None = None, pool: str = "lastk") -> dict:
     """
     Load the multi-pool cache and SELECT one pooling, returning the flat
@@ -212,12 +264,27 @@ def load_pooled(path: str | Path | None = None, pool: str = "lastk") -> dict:
 # Run: precompute over the current cache
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seq", action="store_true",
+                    help="precompute per-token SEQUENCES of final_nodes (for training); "
+                         "default is the multi-pool vectors (for the gate experiments)")
+    args = ap.parse_args()
+
     records = load_dataset()
     print(f"[encoder] loaded {len(records)} records from GoT cache")
-    cache = precompute_pooled(records)
-    any_idx = next(iter(cache))
-    e = cache[any_idx]
-    print(f"\n[sanity] idx={any_idx}: "
-          f"candidates.lastk {tuple(e['candidates']['lastk'].shape)}, "
-          f"final.lastk {tuple(e['final']['lastk'].shape)}, gold={e['gold']}, "
-          f"cand_correct={e['cand_correct']}")
+
+    if args.seq:
+        cache = precompute_sequences(records)
+        any_idx = next(iter(cache))
+        e = cache[any_idx]
+        print(f"\n[sanity] idx={any_idx}: h {tuple(e['h'].shape)} ({e['h'].dtype}), "
+              f"length={e['length']}, label={e['label']}, gold={e['gold']}")
+    else:
+        cache = precompute_pooled(records)
+        any_idx = next(iter(cache))
+        e = cache[any_idx]
+        print(f"\n[sanity] idx={any_idx}: "
+              f"candidates.lastk {tuple(e['candidates']['lastk'].shape)}, "
+              f"final.lastk {tuple(e['final']['lastk'].shape)}, gold={e['gold']}, "
+              f"cand_correct={e['cand_correct']}")

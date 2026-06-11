@@ -37,25 +37,15 @@ class LossConfig:
     answer_tail: int = 16     # tokens at the end treated as the answer region
 
 
-def _mean_interference(I_t: torch.Tensor, answer_tail: int) -> torch.Tensor:
-    """
-    Mean interference over the answer region (last `answer_tail` tokens).
-    I_t: (B, T) → (B,).
-    """
-    T = I_t.shape[1]
-    k = min(answer_tail, T)
-    return I_t[:, -k:].mean(dim=1)
-
-
-def wave_loss(I_t: torch.Tensor, label: torch.Tensor, answer_tail: int) -> torch.Tensor:
+def wave_loss(I_answer: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
     """
     Reward high interference on correct samples, low on wrong ones.
-    We standardize mean-I across the batch (zero-mean/unit-var) so the loss is
-    scale-stable, then use it as a logit predicting correctness via BCE.
+    `I_answer` (B,) is the model's answer-region mean interference (padding-
+    correct). We standardize it across the batch (zero-mean/unit-var) so the
+    loss is scale-stable, then use it as a logit predicting correctness.
     """
-    I_mean = _mean_interference(I_t, answer_tail)            # (B,)
-    mu, sd = I_mean.mean(), I_mean.std() + 1e-6
-    logit = (I_mean - mu) / sd                              # standardized, bounded-ish
+    mu, sd = I_answer.mean(), I_answer.std() + 1e-6
+    logit = (I_answer - mu) / sd
     return F.binary_cross_entropy_with_logits(logit, label.float())
 
 
@@ -86,7 +76,7 @@ def compute_losses(
         comp["L_eps"] = 0.0
 
     if step >= cfg.stage_wave_step:
-        L_wave = wave_loss(out["I_t"], label, cfg.answer_tail)
+        L_wave = wave_loss(out["I_answer"], label)
         total = total + cfg.lambda_wave * L_wave
         comp["L_wave"] = L_wave.item()
     else:
@@ -116,9 +106,9 @@ def main() -> None:
 
     dev = _device()
     print(f"[device] {dev}\n")
-    D, B, T = 128, 8, 24
-    model = MHCoTEncoder(d_model=D).to(dev)
-    h = torch.randn(B, T, D, device=dev)
+    D_IN, D, B, T = 1536, 128, 8, 24
+    model = MHCoTEncoder(d_in=D_IN, d_model=D).to(dev)
+    h = torch.randn(B, T, D_IN, device=dev)
     label = torch.randint(0, 2, (B,), device=dev)
     cfg = LossConfig(stage_eps_step=0, stage_wave_step=0)   # all active for the test
 

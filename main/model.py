@@ -105,7 +105,8 @@ class CouplingLayer(nn.Module):
 class MHCoTEncoder(nn.Module):
     def __init__(
         self,
-        d_model: int,
+        d_in: int,                 # backbone hidden size (e.g. 1536)
+        d_model: int = 128,        # small internal working dim (fights overfit)
         n_heads: int = 8,
         n_chains: int = 2,
         n_semantic: int = 2,
@@ -116,14 +117,22 @@ class MHCoTEncoder(nn.Module):
         beta: float = 0.05,
         dt: float = 0.1,
         answer_tail: int = 16,
+        dropout: float = 0.1,
     ):
         super().__init__()
+        self.d_in = d_in
         self.d_model = d_model
         self.n_chains = n_chains
         self.eps_min = eps_min
         self.answer_tail = answer_tail
         d_hidden = d_hidden or (2 * d_model)
 
+        # real down-projection: backbone dim → small working dim
+        self.in_proj = nn.Sequential(
+            nn.Linear(d_in, d_model),
+            nn.LayerNorm(d_model),
+            nn.Dropout(dropout),
+        )
         self.lift = ComplexLift(d_model)
         self.posenc = ComplexPositionalEncoding(d_model)
         self.semantic = nn.ModuleList(
@@ -152,28 +161,24 @@ class MHCoTEncoder(nn.Module):
             chains.append(z * rot)
         return torch.stack(chains, dim=1)        # (B, N, T, D)
 
-    def _answer_region_pool(self, mag: torch.Tensor,
-                            lengths: torch.Tensor | None) -> torch.Tensor:
+    def _answer_region_mask(self, B: int, T: int,
+                            lengths: torch.Tensor | None,
+                            device) -> torch.Tensor:
         """
-        Pool |Ψ| over the ANSWER REGION (last `answer_tail` REAL tokens) — the
-        representation we proved carries the signal (gates: 0.589→0.689 going
-        from mean to last-16). `mag`: (B,T,D). Returns (B,D).
-          lengths None      → use the last `answer_tail` of T (no padding case)
-          lengths (B,) given → use the last `answer_tail` real tokens per sample,
-                               so padding is never pooled.
+        (B, T) float indicator of the ANSWER REGION = last `answer_tail` REAL
+        tokens per sample (the representation that carries the signal:
+        gates 0.589→0.689 going mean→last-16). With `lengths`, padding is
+        never included; without, uses the last-k of T.
         """
-        B, T, D = mag.shape
         k = min(self.answer_tail, T)
-        if lengths is None:
-            return mag[:, -k:].mean(dim=1)
-        # masked answer-region mean: for each sample, tokens [len-k, len)
-        device = mag.device
         idx = torch.arange(T, device=device).unsqueeze(0)            # (1,T)
-        lo = (lengths - k).clamp(min=0).unsqueeze(1)                 # (B,1)
-        hi = lengths.unsqueeze(1)                                    # (B,1)
-        region = ((idx >= lo) & (idx < hi)).float().unsqueeze(-1)    # (B,T,1)
-        denom = region.sum(dim=1).clamp(min=1.0)                     # (B,1)
-        return (mag * region).sum(dim=1) / denom                    # (B,D)
+        if lengths is None:
+            region = (idx >= (T - k)).float().expand(B, T)
+        else:
+            lo = (lengths - k).clamp(min=0).unsqueeze(1)             # (B,1)
+            hi = lengths.unsqueeze(1)                                # (B,1)
+            region = ((idx >= lo) & (idx < hi)).float()             # (B,T)
+        return region
 
     def forward(self, h: torch.Tensor,
                 key_padding_mask: torch.Tensor | None = None,
@@ -184,7 +189,8 @@ class MHCoTEncoder(nn.Module):
         lengths: (B,) real sequence lengths (optional; for answer-region pool).
         Returns dict(score, I_t, psi, Psi, chain_divergence).
         """
-        z = self.lift(h)                          # (B,T,D) complex
+        h = self.in_proj(h)                       # (B,T,d_in) → (B,T,d_model) real
+        z = self.lift(h)                          # (B,T,d_model) complex
         z = self.posenc(z)
         psi = self.phase_init(z)                  # (B,N,T,D)
 
@@ -210,8 +216,12 @@ class MHCoTEncoder(nn.Module):
         Psi = psi.sum(dim=1)                       # (B,T,D) superposition
         I_t = Psi.abs().pow(2).sum(dim=-1) / D     # (B,T)
 
-        # Scoring from the ANSWER REGION (last-k real tokens), not the mean
-        pooled = self._answer_region_pool(Psi.abs(), lengths)   # (B,D)
+        # Answer-region mask (last-k REAL tokens) — used for BOTH the score
+        # pooling and the answer-region interference (so padding is excluded).
+        region = self._answer_region_mask(B, T, lengths, Psi.device)   # (B,T)
+        denom = region.sum(dim=1, keepdim=True).clamp(min=1.0)          # (B,1)
+        pooled = (Psi.abs() * region.unsqueeze(-1)).sum(dim=1) / denom  # (B,D)
+        I_answer = (I_t * region).sum(dim=1) / denom.squeeze(-1)        # (B,)
         score = self.scorer(pooled).squeeze(-1)    # (B,)
 
         # Monitor: are the chains actually diverging? (mean per-dim phase gap)
@@ -221,6 +231,7 @@ class MHCoTEncoder(nn.Module):
         return {
             "score": score,         # (B,) correctness logit
             "I_t": I_t,             # (B,T) per-token interference
+            "I_answer": I_answer,   # (B,) answer-region mean interference
             "psi": psi,             # (B,N,T,D) chains
             "Psi": Psi,             # (B,T,D) superposition
             "chain_divergence": divergence,
@@ -245,12 +256,13 @@ def main() -> None:
     dev = _device()
     print(f"[device] {dev}\n")
 
-    D, B, T = 128, 4, 20         # small for the smoke test
-    model = MHCoTEncoder(d_model=D, n_heads=8).to(dev)
+    D_IN, D, B, T = 1536, 128, 4, 20    # backbone dim 1536 → working dim 128
+    model = MHCoTEncoder(d_in=D_IN, d_model=D, n_heads=8).to(dev)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"[model] MHCoTEncoder, d_model={D}, trainable params = {n_params/1e6:.2f}M")
+    print(f"[model] MHCoTEncoder, d_in={D_IN}, d_model={D}, "
+          f"trainable params = {n_params/1e6:.2f}M")
 
-    h = torch.randn(B, T, D, device=dev, requires_grad=True)
+    h = torch.randn(B, T, D_IN, device=dev, requires_grad=True)
     out = model(h)
 
     print(f"[test] forward ...")
