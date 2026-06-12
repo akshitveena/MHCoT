@@ -91,6 +91,27 @@ already exists (Option 3).
 
 ---
 
+## Finding 4 — Difficulty-awareness (confirms calibration from another angle)
+
+Does the model know which problems are hard? Difficulty = # calculation steps
+in the GSM8K gold. Spearman(confidence, difficulty), negative = aware:
+
+| Signal | Spearman rho | p-value |
+|---|---|---|
+| complex confidence | **−0.338** | **<0.001** (significant) |
+| real confidence | −0.145 | 0.115 (NOT significant) |
+| complex interference | −0.226 | 0.013 (significant) |
+
+(Sanity: accuracy easy 0.85 / med 0.88 / hard 0.65 — proxy valid.)
+
+**MHCoT's confidence drops significantly on harder problems; the real model's
+does not (statistically indistinguishable from no relationship).** MHCoT is
+difficulty-aware; the over-confident real model is difficulty-blind. NOTE: this
+is a *consequence* of calibration (a calibrated model should track difficulty),
+so it confirms Finding 2 from another angle rather than being independent.
+
+---
+
 ## The contribution these findings support
 
 > **MHCoT provides calibrated reasoning assessment from a SINGLE trace, via
@@ -128,10 +149,14 @@ NOT accuracy.
 |---|---|---|
 | 1 | Calibration (knows when uncertain) | ✅ complex wins (multi-helical), Finding 2 |
 | — | Cross-candidate (Option 3) | ✅ tested — real wins; delineates niche |
-| 2 | Distractor robustness | ⬜ planned (scorer-compatible) |
-| 3 | Difficulty / OOD detection | ⬜ planned (existing data) |
-| 4 | Ambiguity handling | ⬜ needs ambiguous data |
+| 3 | Difficulty / OOD detection | ✅ complex wins (rho −0.34 vs −0.15), Finding 4 |
+| 2 | Distractor robustness | ⬜ needs distractor-augmented data (generation phase) |
+| 4 | Ambiguity handling | ⬜ needs ambiguous data (generation phase) |
 | 5 | Multi-path planning ("higher-dimensional") | ⬜ needs SOLVER expansion (paper-2 scale) |
+
+**Status:** all scorer-compatible, existing-data tests are DONE (#1, #3,
+Option 3). Remaining capabilities (#2 distractor, #4 ambiguity) need NEW data;
+#5 needs a solver. → the data-generation phase serves replication + #2 + #4.
 
 **Scorer vs solver:** current MHCoT is a *scorer*. Capabilities 2–3 are testable
 now. Capability 5 (the "higher-dimensional" frontier — where N chains ARE the
