@@ -42,8 +42,6 @@ from model import MHCoTEncoder                       # noqa: E402
 from losses import compute_losses, LossConfig        # noqa: E402
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_OUT = _PROJECT_ROOT / "results" / "train"
-_OUT.mkdir(parents=True, exist_ok=True)
 
 BASELINE_AUC = 0.689   # untrained interference probe — the bar to beat
 
@@ -137,13 +135,19 @@ def main():
     ap.add_argument("--val_frac", type=float, default=0.2)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max_grad_norm", type=float, default=1.0)
+    ap.add_argument("--tag", type=str, default="",
+                    help="suffix for the output dir, e.g. --tag _task_only")
     args = ap.parse_args()
+
+    global _OUT
+    _OUT = _PROJECT_ROOT / "results" / f"train{args.tag}"
+    _OUT.mkdir(parents=True, exist_ok=True)
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     random.seed(args.seed)
     dev = _device()
-    print(f"[train] device = {dev}")
+    print(f"[train] device = {dev} | output → {_OUT}")
 
     if not SEQ_PATH.exists():
         print(f"[error] sequence cache missing: {SEQ_PATH}")
