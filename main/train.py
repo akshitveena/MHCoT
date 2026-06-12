@@ -67,8 +67,21 @@ class SeqDataset(Dataset):
         return self.items[i]
 
 
-def collate(batch):
-    """Pad variable-length sequences; build padding mask + lengths."""
+def collate(batch, max_seq_len: int = 384):
+    """
+    Pad variable-length sequences; build padding mask + lengths.
+    Sequences longer than max_seq_len are truncated to their LAST max_seq_len
+    tokens — this keeps the answer region (at the end) while bounding the
+    O(T²) attention memory that caused MPS OOM on long traces.
+    """
+    proc = []
+    for h, length, label in batch:
+        if length > max_seq_len:
+            h = h[-max_seq_len:]
+            length = max_seq_len
+        proc.append((h, length, label))
+    batch = proc
+
     maxT = max(it[1] for it in batch)
     B = len(batch)
     D = batch[0][0].shape[1]
@@ -111,7 +124,9 @@ def main():
     ap.add_argument("--n_semantic", type=int, default=2)
     ap.add_argument("--n_coupling", type=int, default=2)
     ap.add_argument("--epochs", type=int, default=40)
-    ap.add_argument("--batch_size", type=int, default=16)
+    ap.add_argument("--batch_size", type=int, default=8)
+    ap.add_argument("--max_seq_len", type=int, default=384,
+                    help="truncate sequences to their last N tokens (bounds attn memory)")
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--weight_decay", type=float, default=0.05)
     ap.add_argument("--eps_min", type=float, default=1.15)
@@ -149,10 +164,12 @@ def main():
                               random_state=args.seed, stratify=labels)
     print(f"[train] split: train={len(tr)} val={len(va)}")
 
+    from functools import partial
+    coll = partial(collate, max_seq_len=args.max_seq_len)
     tl = DataLoader(SeqDataset(tr), batch_size=args.batch_size,
-                    shuffle=True, collate_fn=collate)
+                    shuffle=True, collate_fn=coll)
     vl = DataLoader(SeqDataset(va), batch_size=args.batch_size,
-                    shuffle=False, collate_fn=collate)
+                    shuffle=False, collate_fn=coll)
 
     model = MHCoTEncoder(
         d_in=d_in, d_model=args.d_model,

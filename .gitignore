@@ -18,7 +18,6 @@ env/
 .env
 
 # Large/derived data — keep these LOCAL, don't push
-data/got_cache/
 data/*.parquet
 data/*.arrow
 *.bin
