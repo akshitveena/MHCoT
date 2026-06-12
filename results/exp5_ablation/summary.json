@@ -1,0 +1,31 @@
+{
+  "args": {
+    "d_model": 128,
+    "n_layers": 4,
+    "epochs": 2,
+    "batch_size": 8,
+    "max_seq_len": 384,
+    "lr": 0.0003,
+    "weight_decay": 0.05,
+    "val_frac": 0.2,
+    "seed": 0,
+    "max_grad_norm": 1.0
+  },
+  "real_best_auc": 0.7295417348608838,
+  "real_params": 998401,
+  "complex_best": 0.797,
+  "complex_stable": 0.73,
+  "untrained_probe": 0.689,
+  "log": [
+    {
+      "epoch": 1,
+      "auc_real": 0.7201309328968903,
+      "loss": 0.5161743248502414
+    },
+    {
+      "epoch": 2,
+      "auc_real": 0.7295417348608838,
+      "loss": 0.48801834260423976
+    }
+  ]
+}

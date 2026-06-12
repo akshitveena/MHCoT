@@ -101,6 +101,36 @@ class ComplexLift(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# ComplexPositionalEncoding — multiplicative complex positional encoding that
+# installs a "time axis" so the per-token complex vectors form a coherent
+# multi-frequency signal across the sequence. Amplitude preserved (rotation);
+# only phase carries position. MPS-safe (real cos/sin buffers).
+# ---------------------------------------------------------------------------
+class ComplexPositionalEncoding(nn.Module):
+    def __init__(self, d_model: int, max_len: int = 2048, base: float = 10000.0):
+        super().__init__()
+        self.d_model = d_model
+        self.max_len = max_len
+        k = torch.arange(d_model, dtype=torch.float32)
+        omega = base ** (-k / d_model)                  # (d_model,)
+        t = torch.arange(max_len, dtype=torch.float32)  # (max_len,)
+        theta = torch.outer(t, omega)                   # (max_len, d_model)
+        self.register_buffer("cos", torch.cos(theta), persistent=False)
+        self.register_buffer("sin", torch.sin(theta), persistent=False)
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        T = z.shape[1]
+        if T > self.max_len:
+            raise ValueError(f"seq len {T} exceeds max_len {self.max_len}")
+        cos = self.cos[:T].unsqueeze(0)
+        sin = self.sin[:T].unsqueeze(0)
+        z_re, z_im = z.real, z.imag
+        out_re = z_re * cos - z_im * sin
+        out_im = z_re * sin + z_im * cos
+        return torch.complex(out_re, out_im)
+
+
+# ---------------------------------------------------------------------------
 # modReLU — complex activation that gates magnitude and preserves phase
 # ---------------------------------------------------------------------------
 # Real ReLU doesn't generalize to complex (zero is a manifold, not a
