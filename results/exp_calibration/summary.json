@@ -3,28 +3,28 @@
   "n_val": 120,
   "ece": {
     "real_score": 0.23989865382512413,
-    "complex_score": 0.07184946636358899,
-    "complex_interference": 0.11832495331764221
+    "complex_score": 0.07019123633702597,
+    "complex_interference": 0.35678168932596843
   },
   "brier": {
     "real_score": 0.23543354868888855,
-    "complex_score": 0.14923734962940216
+    "complex_score": 0.14190933108329773
   },
   "precision_at_coverage": {
     "25%": {
       "real_score": 0.9666666388511658,
-      "complex_score": 1.0,
-      "complex_interference": 0.9333333373069763
+      "complex_score": 0.9666666388511658,
+      "complex_interference": 0.5
     },
     "50%": {
       "real_score": 0.9333333373069763,
-      "complex_score": 0.9166666865348816,
-      "complex_interference": 0.8999999761581421
+      "complex_score": 0.9333333373069763,
+      "complex_interference": 0.6833333373069763
     },
     "75%": {
       "real_score": 0.8666666746139526,
-      "complex_score": 0.855555534362793,
-      "complex_interference": 0.8333333134651184
+      "complex_score": 0.8777777552604675,
+      "complex_interference": 0.7333333492279053
     }
   }
 }
