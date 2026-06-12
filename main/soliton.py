@@ -73,11 +73,16 @@ class SolitonCell(nn.Module):
 
     def forward(self, psi: torch.Tensor) -> torch.Tensor:
         re, im = psi.real, psi.imag                     # (B, N, T, D)
+        N = psi.shape[1]
         mag2 = re * re + im * im                         # |ψ|² real
 
         # self-focusing: −α |ψ|² ψ
         sf_re = -self.alpha * mag2 * re
         sf_im = -self.alpha * mag2 * im
+
+        # N=1: single chain, no cross-chain coupling (just self-focusing)
+        if N < 2:
+            return torch.complex(re + self.dt * sf_re, im + self.dt * sf_im)
 
         # consensus Ψ = Σ_i ψ^(i)
         re_sum = re.sum(dim=1, keepdim=True)            # (B, 1, T, D)
@@ -110,6 +115,8 @@ def epsilon_helix_loss(psi: torch.Tensor, eps_min: float = 1.15,
     gap = per-dimension RMS phase gap between chains i and j.
     Zero when chains are ≥ ε_min apart; positive (pulling them apart) when closer.
     """
+    if psi.shape[1] < 2:                                 # N=1: no helix to enforce
+        return psi.real.new_zeros(())
     gap = per_dim_phase_gap(psi, i, j)                  # (B, T)
     return F.relu(eps_min - gap).pow(2).mean()
 
