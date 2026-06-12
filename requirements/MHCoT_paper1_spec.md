@@ -33,6 +33,13 @@ from this spec.
 >        subword BPE; meaning is COMPUTED by the frozen LLM (not looked up); a
 >        thought-vocabulary is impossible (thoughts are infinite/compositional);
 >        the "vocabulary of reasoning concepts" is EMERGENT via the SAE.
+> v1.5 → FIRST EMPIRICAL RESULTS (see requirements/EMPIRICAL_FINDINGS.md).
+>        Headline: accuracy complex≈real (tie), but CALIBRATION is uniquely the
+>        multi-helical interference — ECE 0.070 (N=2) vs 0.225 (N=1) vs 0.240
+>        (real), three confounds ruled out (losses, magnitude readout, single
+>        complex chain). Option 3: real aggregation wins on multi-candidate, so
+>        MHCoT's niche is SINGLE-TRACE calibration (≈ Self-Consistency quality at
+>        1/3 cost). #1 open gate: replicate on more data + seeds.
 
 ---
 
