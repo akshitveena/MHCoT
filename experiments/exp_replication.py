@@ -42,6 +42,7 @@ from model import MHCoTEncoder                     # noqa: E402
 from train import SeqDataset, collate, _device      # noqa: E402
 from exp5_ablation import RealEncoder               # noqa: E402
 from exp_calibration import ece                     # noqa: E402
+from losses import compute_losses, LossConfig        # noqa: E402
 
 _HID = _PROJECT_ROOT / "data" / "hidden_cache"
 _OUT = _PROJECT_ROOT / "results" / "exp_replication"
@@ -66,17 +67,37 @@ def train_taskonly(model, loader, dev, epochs=40, lr=3e-4, wd=0.05):
     return model
 
 
+def train_full(model, loader, dev, epochs=40, lr=3e-4, wd=0.05):
+    """Full multi-helical training: staged task → +L_ε → +L_wave, so the
+    chains actually DIFFERENTIATE (ε-helix engaged). Returns (model, final_div)."""
+    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
+    cfg = LossConfig(eps_min=1.15, lambda_eps=0.10, lambda_wave=0.05,
+                     stage_eps_step=100, stage_wave_step=300)  # engage early on small data
+    step = 0; last_div = 0.0
+    for _ in range(epochs):
+        model.train()
+        for H, mask, lengths, y in loader:
+            H, mask, lengths, y = H.to(dev), mask.to(dev), lengths.to(dev), y.to(dev)
+            out = model(H, key_padding_mask=mask, lengths=lengths)
+            loss, comp = compute_losses(out, y, step, cfg)
+            opt.zero_grad(); loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step()
+            step += 1; last_div = comp["chain_divergence"]
+    return model, last_div
+
+
 @torch.no_grad()
 def evaluate(model, loader, dev):
-    model.eval(); s, y = [], []
+    model.eval(); s, y, divs = [], [], []
     for H, mask, lengths, yy in loader:
         H, mask, lengths = H.to(dev), mask.to(dev), lengths.to(dev)
-        s.append(model(H, key_padding_mask=mask, lengths=lengths)["score"].float().cpu())
-        y.append(yy)
+        out = model(H, key_padding_mask=mask, lengths=lengths)
+        s.append(out["score"].float().cpu()); y.append(yy)
+        divs.append(out["chain_divergence"])
     s = torch.cat(s).numpy(); y = torch.cat(y).numpy()
     p = 1 / (1 + np.exp(-s))
     auc = roc_auc_score(y, s) if len(set(y.tolist())) > 1 else float("nan")
-    return ece(p, y), auc, float(y.mean())
+    return ece(p, y), auc, float(np.mean(divs))
 
 
 def main():
@@ -112,28 +133,49 @@ def main():
         np_ = sum(p.numel() for p in model.parameters())
         print(f"\n[{name}] params={np_/1e6:.2f}M — training task-only on {len(train_items)} ...")
         train_taskonly(model, tl, dev)
-        e, auc, base = evaluate(model, vl, dev)
-        results[name] = {"ece": e, "auc": auc, "params": np_}
-        print(f"[{name}] held-out ECE={e:.3f}  AUC={auc:.3f}")
+        e, auc, div = evaluate(model, vl, dev)
+        results[name] = {"ece": e, "auc": auc, "params": np_, "eval_div": div}
+        print(f"[{name}] held-out ECE={e:.3f}  AUC={auc:.3f}  div={div:.3f}")
+
+    # THE ACTUAL multi-helical model: full staged losses, chains DIFFERENTIATE
+    torch.manual_seed(0); np.random.seed(0)
+    model = MHCoTEncoder(d_in=d_in, d_model=128, n_chains=2).to(dev)
+    print(f"\n[complex_N2_FULL] training with staged L_ε + L_wave "
+          f"(chains should differentiate) ...")
+    model, train_div = train_full(model, tl, dev)
+    e, auc, div = evaluate(model, vl, dev)
+    results["complex_N2_full"] = {"ece": e, "auc": auc, "eval_div": div,
+                                   "train_div": train_div}
+    print(f"[complex_N2_FULL] held-out ECE={e:.3f}  AUC={auc:.3f}  "
+          f"chain divergence: train={train_div:.3f} eval={div:.3f}  "
+          f"({'DIFFERENTIATED' if div > 0.9 else 'did NOT differentiate'})")
 
     print("\n" + "=" * 60)
     print(f"REPLICATION on {len(test_items)} held-out test traces "
           f"(trained on {len(train_items)} train traces)")
-    print(f"{'model':<14}{'ECE':>8}{'AUC':>8}")
-    for name in configs:
+    print(f"{'model':<18}{'ECE':>8}{'AUC':>8}{'div':>8}")
+    order = ["real", "complex_N1", "complex_N2", "complex_N2_full"]
+    for name in order:
         r = results[name]
-        print(f"{name:<14}{r['ece']:>8.3f}{r['auc']:>8.3f}")
+        print(f"{name:<18}{r['ece']:>8.3f}{r['auc']:>8.3f}{r.get('eval_div',0):>8.3f}")
     print("-" * 60)
-    re_, n1, n2 = results["real"]["ece"], results["complex_N1"]["ece"], results["complex_N2"]["ece"]
-    print("Original (120-val): real 0.240 | N=1 0.225 | N=2 0.070")
-    print(f"Now    (605 held-out): real {re_:.3f} | N=1 {n1:.3f} | N=2 {n2:.3f}")
-    if n2 < re_ - 0.05 and n2 < n1 - 0.05:
-        print("  → REPLICATED: N=2 multi-helical interference calibrates on the")
-        print("    big held-out set; real and single-chain complex do not. Bulletproof.")
-    elif n2 < re_ - 0.02:
-        print("  → Partial: N=2 still best-calibrated but margin smaller — report honestly.")
+    re_ = results["real"]["ece"]
+    n2f = results["complex_N2_full"]["ece"]
+    n2f_div = results["complex_N2_full"]["eval_div"]
+    print("Original (120-val): real 0.240 | N=2-full 0.070")
+    print(f"Now (held-out):     real {re_:.3f} | N=2-full {n2f:.3f} "
+          f"(chains {'differentiated' if n2f_div > 0.9 else 'did NOT differentiate'}, "
+          f"div={n2f_div:.2f})")
+    if n2f_div <= 0.9:
+        print("  ⚠ The full model's chains did NOT differentiate on held-out — the")
+        print("    multi-helical mechanism didn't engage; verdict inconclusive for it.")
+    elif n2f < re_ - 0.05:
+        print("  → REPLICATED for the FULL multi-helical model: differentiated chains")
+        print("    calibrate where real doesn't. The finding survives.")
+    elif n2f < re_ - 0.02:
+        print("  → Partial: full N=2 best-calibrated but margin small — report honestly.")
     else:
-        print("  → DID NOT replicate at scale. The 120-val result was likely noise.")
+        print("  → DID NOT replicate even for the full multi-helical model.")
     print("=" * 60)
     json.dump({"n_train": len(train_items), "n_eval": len(test_items),
                "results": results, "elapsed_min": (time.time()-t0)/60},
