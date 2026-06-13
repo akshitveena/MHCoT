@@ -269,17 +269,22 @@ if __name__ == "__main__":
     ap.add_argument("--seq", action="store_true",
                     help="precompute per-token SEQUENCES of final_nodes (for training); "
                          "default is the multi-pool vectors (for the gate experiments)")
+    ap.add_argument("--cache", type=str, default="gsm8k_test.jsonl",
+                    help="which got_cache jsonl to encode (e.g. gsm8k_train.jsonl)")
     args = ap.parse_args()
 
-    records = load_dataset()
-    print(f"[encoder] loaded {len(records)} records from GoT cache")
+    cache_path = _PROJECT_ROOT / "data" / "got_cache" / args.cache
+    records = load_dataset(cache_path)
+    stem = Path(args.cache).stem               # e.g. gsm8k_train
+    print(f"[encoder] loaded {len(records)} records from {args.cache}")
 
     if args.seq:
-        cache = precompute_sequences(records)
+        seq_out = _HIDDEN_DIR / f"{stem}_seq.pt"
+        cache = precompute_sequences(records, out_path=seq_out)
         any_idx = next(iter(cache))
         e = cache[any_idx]
-        print(f"\n[sanity] idx={any_idx}: h {tuple(e['h'].shape)} ({e['h'].dtype}), "
-              f"length={e['length']}, label={e['label']}, gold={e['gold']}")
+        print(f"\n[sanity] {stem}_seq.pt — idx={any_idx}: h {tuple(e['h'].shape)} "
+              f"({e['h'].dtype}), length={e['length']}, label={e['label']}, gold={e['gold']}")
     else:
         cache = precompute_pooled(records)
         any_idx = next(iter(cache))
