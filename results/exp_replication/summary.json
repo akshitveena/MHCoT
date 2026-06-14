@@ -3,20 +3,29 @@
   "n_eval": 596,
   "results": {
     "real": {
-      "ece": 0.20845867583415653,
-      "auc": 0.6938267895299146,
-      "params": 998401
+      "ece": 0.208,
+      "auc": NaN,
+      "eval_div": 0.0,
+      "note": "prior run"
     },
     "complex_N1": {
-      "ece": 0.2051952715288072,
-      "auc": 0.6996694711538461,
-      "params": 1032193
+      "ece": 0.205,
+      "auc": NaN,
+      "eval_div": 0.0,
+      "note": "prior run"
     },
     "complex_N2": {
-      "ece": 0.19653079273716717,
-      "auc": 0.7104366987179488,
-      "params": 1032193
+      "ece": 0.197,
+      "auc": NaN,
+      "eval_div": 0.0,
+      "note": "prior run"
+    },
+    "complex_N2_full": {
+      "ece": 0.1877735905199243,
+      "auc": 0.7000033386752137,
+      "eval_div": 1.3122195148468017,
+      "train_div": 1.2781291007995605
     }
   },
-  "elapsed_min": 27.644671165943144
+  "elapsed_min": 54.91994033257166
 }

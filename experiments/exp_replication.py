@@ -69,17 +69,21 @@ def train_taskonly(model, loader, dev, epochs=40, lr=3e-4, wd=0.05):
 
 def train_full(model, loader, dev, epochs=40, lr=3e-4, wd=0.05):
     """Full multi-helical training: staged task → +L_ε → +L_wave, so the
-    chains actually DIFFERENTIATE (ε-helix engaged). Returns (model, final_div)."""
+    chains actually DIFFERENTIATE (ε-helix engaged). Returns (model, final_div).
+    Uses the ORIGINAL schedule (500/1500); engaging L_ε too early destabilizes
+    the atan2 phase gradients → NaN. NaN steps are skipped defensively."""
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
     cfg = LossConfig(eps_min=1.15, lambda_eps=0.10, lambda_wave=0.05,
-                     stage_eps_step=100, stage_wave_step=300)  # engage early on small data
-    step = 0; last_div = 0.0
+                     stage_eps_step=500, stage_wave_step=1500)  # original schedule
+    step = 0; last_div = 0.0; n_skipped = 0
     for _ in range(epochs):
         model.train()
         for H, mask, lengths, y in loader:
             H, mask, lengths, y = H.to(dev), mask.to(dev), lengths.to(dev), y.to(dev)
             out = model(H, key_padding_mask=mask, lengths=lengths)
             loss, comp = compute_losses(out, y, step, cfg)
+            if not torch.isfinite(loss):           # skip NaN/inf steps
+                n_skipped += 1; step += 1; continue
             opt.zero_grad(); loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step()
             step += 1; last_div = comp["chain_divergence"]
@@ -95,12 +99,23 @@ def evaluate(model, loader, dev):
         s.append(out["score"].float().cpu()); y.append(yy)
         divs.append(out["chain_divergence"])
     s = torch.cat(s).numpy(); y = torch.cat(y).numpy()
+    if not np.isfinite(s).all():               # diverged → report NaN, don't crash
+        n_bad = int((~np.isfinite(s)).sum())
+        print(f"    [warn] {n_bad}/{len(s)} scores are NaN/inf — model diverged")
+        return float("nan"), float("nan"), float(np.mean(divs))
     p = 1 / (1 + np.exp(-s))
     auc = roc_auc_score(y, s) if len(set(y.tolist())) > 1 else float("nan")
     return ece(p, y), auc, float(np.mean(divs))
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--full_only", action="store_true",
+                    help="train ONLY the full multi-helical N=2 (skip real/N1/N2-taskonly, "
+                         "whose results we already have)")
+    args = ap.parse_args()
+
     dev = _device(); print(f"[replication] device={dev}")
     tr_path, te_path = _HID / "gsm8k_train_seq.pt", _HID / "gsm8k_test_seq.pt"
     for p in (tr_path, te_path):
@@ -125,17 +140,26 @@ def main():
         "complex_N1":  lambda: MHCoTEncoder(d_in=d_in, d_model=128, n_chains=1),
         "complex_N2":  lambda: MHCoTEncoder(d_in=d_in, d_model=128, n_chains=2),
     }
+    # known prior results (120-val) — used to fill the table when --full_only
+    PRIOR = {"real": 0.208, "complex_N1": 0.205, "complex_N2": 0.197}
     results = {}
     t0 = time.time()
-    for name, build in configs.items():
-        torch.manual_seed(0); np.random.seed(0)
-        model = build().to(dev)
-        np_ = sum(p.numel() for p in model.parameters())
-        print(f"\n[{name}] params={np_/1e6:.2f}M — training task-only on {len(train_items)} ...")
-        train_taskonly(model, tl, dev)
-        e, auc, div = evaluate(model, vl, dev)
-        results[name] = {"ece": e, "auc": auc, "params": np_, "eval_div": div}
-        print(f"[{name}] held-out ECE={e:.3f}  AUC={auc:.3f}  div={div:.3f}")
+    if not args.full_only:
+        for name, build in configs.items():
+            torch.manual_seed(0); np.random.seed(0)
+            model = build().to(dev)
+            np_ = sum(p.numel() for p in model.parameters())
+            print(f"\n[{name}] params={np_/1e6:.2f}M — training task-only on {len(train_items)} ...")
+            train_taskonly(model, tl, dev)
+            e, auc, div = evaluate(model, vl, dev)
+            results[name] = {"ece": e, "auc": auc, "params": np_, "eval_div": div}
+            print(f"[{name}] held-out ECE={e:.3f}  AUC={auc:.3f}  div={div:.3f}")
+    else:
+        print("\n[--full_only] skipping real / N1 / N2-taskonly "
+              f"(prior held-out ECE: {PRIOR})")
+        for name in configs:
+            results[name] = {"ece": PRIOR[name], "auc": float("nan"),
+                             "eval_div": 0.0, "note": "prior run"}
 
     # THE ACTUAL multi-helical model: full staged losses, chains DIFFERENTIATE
     torch.manual_seed(0); np.random.seed(0)
