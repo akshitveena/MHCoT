@@ -91,6 +91,39 @@ already exists (Option 3).
 
 ---
 
+## ⚠️ REPLICATION VERDICT (supersedes Findings 2 & 4): the calibration finding was NOISE
+
+Findings 2 and 4 below were measured on a SINGLE 120-sample in-distribution
+val split (seed 0). Rigorous follow-up shows they do **not** hold:
+
+**Multi-seed reproduction (exact original conditions, best-AUC ckpt):**
+```
+            seed0   seed1   seed2     mean ± std
+real        0.240   0.038   0.192   0.157 ± 0.086
+N=1         0.079   0.112   0.182   0.124 ± 0.043
+N=2 full    0.075   0.170   0.184   0.143 ± 0.049
+```
+ECE swings wildly; seed 0 (the original) was a fluke; seed 1 reverses it
+(real 0.038 < N=2 0.170). Across seeds N=2 (0.143) ≈ real (0.157), std dwarfs
+the gap. **The 0.070-vs-0.240 headline was single-seed noise.**
+
+**Full differentiated model on held-out (train 361 → eval 596):**
+```
+complex_N2_full: ECE 0.188  AUC 0.700  div 1.312 (chains DID differentiate)
+vs real 0.208 | N=1 0.205 | N=2-taskonly 0.197   (all ~0.19-0.21, tied)
+```
+Even the genuinely multi-helical model (chains differentiated to 1.31) shows
+no calibration advantage on held-out data.
+
+**CONCLUSION: MHCoT does not robustly beat a matched real transformer on
+GSM8K trace scoring — not in accuracy (always a tie) and not in calibration
+(the apparent advantage was single-seed noise). The mechanism works but does
+not help. This is an honest NEGATIVE result.** Findings 2 and 4 below are
+retained only as a record of what the small-sample run showed; they are
+SUPERSEDED by this verdict.
+
+---
+
 ## Finding 4 — Difficulty-awareness (confirms calibration from another angle)
 
 Does the model know which problems are hard? Difficulty = # calculation steps
