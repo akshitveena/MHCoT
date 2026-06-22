@@ -34,3 +34,6 @@ hf_cache/
 # hidden-state caches (large, regenerable)
 data/hidden_cache/
 *.pt
+
+# copyrighted reference PDFs — keep local, don't commit
+papers/
