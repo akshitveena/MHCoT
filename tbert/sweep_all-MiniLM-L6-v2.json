@@ -1,0 +1,50 @@
+{
+  "model": "sentence-transformers/all-MiniLM-L6-v2",
+  "epochs": 3,
+  "rows": [
+    {
+      "f1": 0.8364849833147943,
+      "precision": 0.7372549019607844,
+      "recall": 0.9665809768637532,
+      "accuracy": 0.7277777777777777,
+      "auc": 0.6726876521561483,
+      "runtime": 2.8333,
+      "samples_per_second": 190.587,
+      "steps_per_second": 3.176,
+      "n_freeze": 0
+    },
+    {
+      "f1": 0.83745963401507,
+      "precision": 0.7203703703703703,
+      "recall": 1.0,
+      "accuracy": 0.7203703703703703,
+      "auc": 0.6585062735150412,
+      "runtime": 4.5428,
+      "samples_per_second": 118.869,
+      "steps_per_second": 1.981,
+      "n_freeze": 2
+    },
+    {
+      "f1": 0.83745963401507,
+      "precision": 0.7203703703703703,
+      "recall": 1.0,
+      "accuracy": 0.7203703703703703,
+      "auc": 0.6259895469790089,
+      "runtime": 3.1185,
+      "samples_per_second": 173.162,
+      "steps_per_second": 2.886,
+      "n_freeze": 4
+    },
+    {
+      "f1": 0.83745963401507,
+      "precision": 0.7203703703703703,
+      "recall": 1.0,
+      "accuracy": 0.7203703703703703,
+      "auc": 0.6105824069187422,
+      "runtime": 3.541,
+      "samples_per_second": 152.499,
+      "steps_per_second": 2.542,
+      "n_freeze": "all"
+    }
+  ]
+}

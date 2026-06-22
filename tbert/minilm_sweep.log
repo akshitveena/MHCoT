@@ -1,0 +1,87 @@
+Map:   0%|          | 0/1250 [00:00<?, ? examples/s]Map:  80%|████████  | 1000/1250 [00:00<00:00, 1502.45 examples/s]Map: 100%|██████████| 1250/1250 [00:00<00:00, 1523.88 examples/s]Map: 100%|██████████| 1250/1250 [00:00<00:00, 1516.39 examples/s]
+Map:   0%|          | 0/540 [00:00<?, ? examples/s]Map: 100%|██████████| 540/540 [00:00<00:00, 1554.25 examples/s]Map: 100%|██████████| 540/540 [00:00<00:00, 1547.73 examples/s]
+Some weights of BertForSequenceClassification were not initialized from the model checkpoint at sentence-transformers/all-MiniLM-L6-v2 and are newly initialized: ['classifier.bias', 'classifier.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+  [all-MiniLM-L6-v2] n_freeze=0: trainable 22.7M / 22.7M (100%)
+{'eval_loss': 0.5754563808441162, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.654982209434958, 'eval_runtime': 2.6473, 'eval_samples_per_second': 203.978, 'eval_steps_per_second': 3.4, 'epoch': 1.0}
+{'eval_loss': 0.5652347207069397, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6681931936192309, 'eval_runtime': 2.7317, 'eval_samples_per_second': 197.68, 'eval_steps_per_second': 3.295, 'epoch': 2.0}
+{'eval_loss': 0.5586035251617432, 'eval_f1': 0.8364849833147943, 'eval_precision': 0.7372549019607844, 'eval_recall': 0.9665809768637532, 'eval_accuracy': 0.7277777777777777, 'eval_auc': 0.6726876521561483, 'eval_runtime': 2.8556, 'eval_samples_per_second': 189.103, 'eval_steps_per_second': 3.152, 'epoch': 3.0}
+{'train_runtime': 85.0117, 'train_samples_per_second': 44.112, 'train_steps_per_second': 2.788, 'train_loss': 0.5493364293867022, 'epoch': 3.0}
+{'eval_loss': 0.5586035251617432, 'eval_f1': 0.8364849833147943, 'eval_precision': 0.7372549019607844, 'eval_recall': 0.9665809768637532, 'eval_accuracy': 0.7277777777777777, 'eval_auc': 0.6726876521561483, 'eval_runtime': 2.8333, 'eval_samples_per_second': 190.587, 'eval_steps_per_second': 3.176, 'epoch': 3.0}
+  -> n_freeze=0: F1=0.836 AUC=0.673 acc=0.728 prec=0.737 rec=0.967
+Map:   0%|          | 0/1250 [00:00<?, ? examples/s]Map:  80%|████████  | 1000/1250 [00:00<00:00, 1372.66 examples/s]Map: 100%|██████████| 1250/1250 [00:00<00:00, 1379.76 examples/s]Map: 100%|██████████| 1250/1250 [00:00<00:00, 1376.37 examples/s]
+Map:   0%|          | 0/540 [00:00<?, ? examples/s]Map: 100%|██████████| 540/540 [00:00<00:00, 1391.62 examples/s]Map: 100%|██████████| 540/540 [00:00<00:00, 1385.92 examples/s]
+Some weights of BertForSequenceClassification were not initialized from the model checkpoint at sentence-transformers/all-MiniLM-L6-v2 and are newly initialized: ['classifier.bias', 'classifier.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+  [all-MiniLM-L6-v2] n_freeze=2: trainable 7.2M / 22.7M (32%)
+{'eval_loss': 0.5833950042724609, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6601235976097652, 'eval_runtime': 2.7375, 'eval_samples_per_second': 197.258, 'eval_steps_per_second': 3.288, 'epoch': 1.0}
+{'eval_loss': 0.5679351687431335, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6599193040399053, 'eval_runtime': 3.8638, 'eval_samples_per_second': 139.759, 'eval_steps_per_second': 2.329, 'epoch': 2.0}
+{'eval_loss': 0.5631087422370911, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6585062735150412, 'eval_runtime': 4.7843, 'eval_samples_per_second': 112.868, 'eval_steps_per_second': 1.881, 'epoch': 3.0}
+{'train_runtime': 87.7794, 'train_samples_per_second': 42.721, 'train_steps_per_second': 2.7, 'train_loss': 0.570610722409019, 'epoch': 3.0}
+{'eval_loss': 0.5631087422370911, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6585062735150412, 'eval_runtime': 4.5428, 'eval_samples_per_second': 118.869, 'eval_steps_per_second': 1.981, 'epoch': 3.0}
+  -> n_freeze=2: F1=0.837 AUC=0.659 acc=0.720 prec=0.720 rec=1.000
+Map:   0%|          | 0/1250 [00:00<?, ? examples/s]Map:  80%|████████  | 1000/1250 [00:00<00:00, 1288.95 examples/s]Map: 100%|██████████| 1250/1250 [00:00<00:00, 1292.12 examples/s]Map: 100%|██████████| 1250/1250 [00:00<00:00, 1289.70 examples/s]
+Map:   0%|          | 0/540 [00:00<?, ? examples/s]Map: 100%|██████████| 540/540 [00:00<00:00, 1321.24 examples/s]Map: 100%|██████████| 540/540 [00:00<00:00, 1315.96 examples/s]
+Some weights of BertForSequenceClassification were not initialized from the model checkpoint at sentence-transformers/all-MiniLM-L6-v2 and are newly initialized: ['classifier.bias', 'classifier.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+  [all-MiniLM-L6-v2] n_freeze=4: trainable 3.7M / 22.7M (16%)
+{'eval_loss': 0.5861090421676636, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6240828069936499, 'eval_runtime': 3.7667, 'eval_samples_per_second': 143.362, 'eval_steps_per_second': 2.389, 'epoch': 1.0}
+{'eval_loss': 0.5826632976531982, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6264151585828835, 'eval_runtime': 3.3077, 'eval_samples_per_second': 163.257, 'eval_steps_per_second': 2.721, 'epoch': 2.0}
+{'eval_loss': 0.5805647969245911, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6259895469790089, 'eval_runtime': 3.1629, 'eval_samples_per_second': 170.731, 'eval_steps_per_second': 2.846, 'epoch': 3.0}
+{'train_runtime': 69.36, 'train_samples_per_second': 54.066, 'train_steps_per_second': 3.417, 'train_loss': 0.5851909782313094, 'epoch': 3.0}
+{'eval_loss': 0.5805647969245911, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6259895469790089, 'eval_runtime': 3.1185, 'eval_samples_per_second': 173.162, 'eval_steps_per_second': 2.886, 'epoch': 3.0}
+  -> n_freeze=4: F1=0.837 AUC=0.626 acc=0.720 prec=0.720 rec=1.000
+Map:   0%|          | 0/1250 [00:00<?, ? examples/s]Map:  80%|████████  | 1000/1250 [00:00<00:00, 1543.76 examples/s]Map: 100%|██████████| 1250/1250 [00:00<00:00, 1499.31 examples/s]Map: 100%|██████████| 1250/1250 [00:00<00:00, 1507.92 examples/s]
+Map:   0%|          | 0/540 [00:00<?, ? examples/s]Map: 100%|██████████| 540/540 [00:00<00:00, 1517.90 examples/s]Map: 100%|██████████| 540/540 [00:00<00:00, 1512.07 examples/s]
+Some weights of BertForSequenceClassification were not initialized from the model checkpoint at sentence-transformers/all-MiniLM-L6-v2 and are newly initialized: ['classifier.bias', 'classifier.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+  [all-MiniLM-L6-v2] n_freeze=all: trainable 0.1M / 22.7M (1%)
+{'eval_loss': 0.6272443532943726, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6015764653807522, 'eval_runtime': 3.2274, 'eval_samples_per_second': 167.317, 'eval_steps_per_second': 2.789, 'epoch': 1.0}
+{'eval_loss': 0.6063278913497925, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6083011287219734, 'eval_runtime': 3.3889, 'eval_samples_per_second': 159.345, 'eval_steps_per_second': 2.656, 'epoch': 2.0}
+{'eval_loss': 0.6010454893112183, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6105824069187422, 'eval_runtime': 3.5615, 'eval_samples_per_second': 151.621, 'eval_steps_per_second': 2.527, 'epoch': 3.0}
+{'train_runtime': 49.1669, 'train_samples_per_second': 76.271, 'train_steps_per_second': 4.82, 'train_loss': 0.6242544439774526, 'epoch': 3.0}
+{'eval_loss': 0.6010454893112183, 'eval_f1': 0.83745963401507, 'eval_precision': 0.7203703703703703, 'eval_recall': 1.0, 'eval_accuracy': 0.7203703703703703, 'eval_auc': 0.6105824069187422, 'eval_runtime': 3.541, 'eval_samples_per_second': 152.499, 'eval_steps_per_second': 2.542, 'epoch': 3.0}
+  -> n_freeze=all: F1=0.837 AUC=0.611 acc=0.720 prec=0.720 rec=1.000
+
+=== all-MiniLM-L6-v2 freeze sweep (3 epochs) ===
+  n_freeze |     F1 |    AUC |    acc
+         0 | 0.836 | 0.673 | 0.728
+         2 | 0.837 | 0.659 | 0.720
+         4 | 0.837 | 0.626 | 0.720
+       all | 0.837 | 0.611 | 0.720
+
+reference:  frozen-DeepSeek probe AUC=0.819 | majority F1=0.837/acc=0.720
+saved -> sweep_all-MiniLM-L6-v2.json
+plot  -> sweep_all-MiniLM-L6-v2.png
