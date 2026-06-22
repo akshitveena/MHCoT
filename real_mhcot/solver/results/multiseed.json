@@ -1,0 +1,121 @@
+{
+  "args": {
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "n_train": 400,
+    "n_test": 100,
+    "steps": 2500,
+    "budget": 50,
+    "beam": 3
+  },
+  "per_seed": {
+    "0": {
+      "real": {
+        "n_solvable": 49,
+        "bestfirst_solve_rate": 0.04081632653061224,
+        "bestfirst_avg_nodes": 44.5,
+        "beam_solve_rate": 0.4489795918367347
+      },
+      "N1": {
+        "n_solvable": 49,
+        "bestfirst_solve_rate": 0.3469387755102041,
+        "bestfirst_avg_nodes": 36.411764705882355,
+        "beam_solve_rate": 0.5510204081632653
+      },
+      "N2": {
+        "n_solvable": 49,
+        "bestfirst_solve_rate": 0.2653061224489796,
+        "bestfirst_avg_nodes": 40.61538461538461,
+        "beam_solve_rate": 0.46938775510204084
+      }
+    },
+    "1": {
+      "real": {
+        "n_solvable": 53,
+        "bestfirst_solve_rate": 0.09433962264150944,
+        "bestfirst_avg_nodes": 36.6,
+        "beam_solve_rate": 0.6226415094339622
+      },
+      "N1": {
+        "n_solvable": 53,
+        "bestfirst_solve_rate": 0.16981132075471697,
+        "bestfirst_avg_nodes": 40.333333333333336,
+        "beam_solve_rate": 0.20754716981132076
+      },
+      "N2": {
+        "n_solvable": 53,
+        "bestfirst_solve_rate": 0.05660377358490566,
+        "bestfirst_avg_nodes": 37.333333333333336,
+        "beam_solve_rate": 0.2830188679245283
+      }
+    },
+    "2": {
+      "real": {
+        "n_solvable": 56,
+        "bestfirst_solve_rate": 0.19642857142857142,
+        "bestfirst_avg_nodes": 42.72727272727273,
+        "beam_solve_rate": 0.39285714285714285
+      },
+      "N1": {
+        "n_solvable": 56,
+        "bestfirst_solve_rate": 0.5,
+        "bestfirst_avg_nodes": 34.92857142857143,
+        "beam_solve_rate": 0.6071428571428571
+      },
+      "N2": {
+        "n_solvable": 56,
+        "bestfirst_solve_rate": 0.03571428571428571,
+        "bestfirst_avg_nodes": 49.5,
+        "beam_solve_rate": 0.44642857142857145
+      }
+    }
+  },
+  "summary": {
+    "real": {
+      "beam": [
+        0.48815941470927987,
+        0.09781447633494933
+      ],
+      "bestfirst": [
+        0.11052817353356437,
+        0.06455150179267247
+      ],
+      "nodes": [
+        41.275757575757574,
+        3.384540557329117
+      ]
+    },
+    "N1": {
+      "beam": [
+        0.4552368117058143,
+        0.17663531422346548
+      ],
+      "bestfirst": [
+        0.33891669875497366,
+        0.1349182623221339
+      ],
+      "nodes": [
+        37.224556489262376,
+        2.28010755216195
+      ]
+    },
+    "N2": {
+      "beam": [
+        0.39961173148504686,
+        0.08297470660255168
+      ],
+      "bestfirst": [
+        0.11920806058272365,
+        0.10365833440259867
+      ],
+      "nodes": [
+        42.48290598290598,
+        5.139563631804817
+      ]
+    }
+  },
+  "elapsed_min": 72.87152633666992
+}

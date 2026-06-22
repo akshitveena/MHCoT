@@ -1,0 +1,24 @@
+{
+  "budget": 50,
+  "beam": 3,
+  "results": {
+    "real": {
+      "n_solvable": 49,
+      "bestfirst_solve_rate": 0.04081632653061224,
+      "bestfirst_avg_nodes": 44.5,
+      "beam_solve_rate": 0.4489795918367347
+    },
+    "N1": {
+      "n_solvable": 49,
+      "bestfirst_solve_rate": 0.3469387755102041,
+      "bestfirst_avg_nodes": 36.411764705882355,
+      "beam_solve_rate": 0.5510204081632653
+    },
+    "N2": {
+      "n_solvable": 49,
+      "bestfirst_solve_rate": 0.2653061224489796,
+      "bestfirst_avg_nodes": 40.61538461538461,
+      "beam_solve_rate": 0.46938775510204084
+    }
+  }
+}
