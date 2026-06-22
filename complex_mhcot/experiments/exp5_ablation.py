@@ -46,7 +46,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_PROJECT_ROOT / "main"))
+sys.path.insert(0, str(_PROJECT_ROOT.parent / "main"))
 
 from encoder import load_sequences, SEQ_PATH         # noqa: E402
 from train import SeqDataset, collate, _device       # noqa: E402

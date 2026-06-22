@@ -42,13 +42,24 @@ def _wrap(dphi: torch.Tensor) -> torch.Tensor:
     return (dphi + _PI) % _TWO_PI - _PI
 
 
+def _safe_phase(z: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    """atan2 phase with a gradient-safe floor: where |z| ≈ 0 the phase is
+    undefined and atan2(0,0) has a NaN gradient, so we nudge those degenerate
+    positions to a tiny positive real (phase 0, finite grad). Non-degenerate
+    positions are unchanged, so this does not bias real phases."""
+    re, im = z.real, z.imag
+    mag = torch.sqrt(re * re + im * im)
+    re = torch.where(mag < eps, torch.full_like(re, eps), re)
+    return torch.atan2(im, re)
+
+
 def per_dim_phase_gap(psi: torch.Tensor, i: int = 0, j: int = 1) -> torch.Tensor:
     """
     Per-dimension RMS phase gap between chain i and chain j.
     psi: (B, N, T, D) complex → returns (B, T) real.
     Matches the ε scale measured in Experiment −1.
     """
-    phi = torch.atan2(psi.imag, psi.real)              # (B, N, T, D)
+    phi = _safe_phase(psi)                             # (B, N, T, D)
     dphi = _wrap(phi[:, i] - phi[:, j])                # (B, T, D)
     D = phi.shape[-1]
     return dphi.norm(dim=-1) / math.sqrt(D)            # (B, T)
@@ -64,12 +75,19 @@ class SolitonCell(nn.Module):
     """
 
     def __init__(self, alpha: float = 0.01, beta: float = 0.05,
-                 eps_min: float = 1.15, dt: float = 0.1):
+                 eps_min: float = 1.15, dt: float = 0.1,
+                 detach_gate: bool = False):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
         self.eps_min = eps_min
         self.dt = dt
+        # The coupling gate is a modulation signal computed via atan2; its
+        # gradient is NaN where |ψ| ≈ 0. Detaching it stops backprop THROUGH the
+        # gate (gradient still flows through the coupled values), removing that
+        # instability without changing the forward dynamics. Opt-in so the
+        # original scorer's behavior is untouched.
+        self.detach_gate = detach_gate
 
     def forward(self, psi: torch.Tensor) -> torch.Tensor:
         re, im = psi.real, psi.imag                     # (B, N, T, D)
@@ -91,11 +109,13 @@ class SolitonCell(nn.Module):
         diff_im = im_sum - im
 
         # phase-gap gate (chain 0 vs chain 1), per-dimension RMS, broadcast
-        phi = torch.atan2(im, re)                        # (B, N, T, D)
+        phi = _safe_phase(torch.complex(re, im))         # (B, N, T, D) safe atan2
         dphi = _wrap(phi[:, 0:1] - phi[:, 1:2])          # (B, 1, T, D)
         D = re.shape[-1]
         gap = dphi.norm(dim=-1, keepdim=True) / math.sqrt(D)   # (B, 1, T, 1)
         gate = torch.exp(-gap / self.eps_min)            # (B, 1, T, 1)
+        if self.detach_gate:
+            gate = gate.detach()
 
         cp_re = self.beta * gate * diff_re
         cp_im = self.beta * gate * diff_im

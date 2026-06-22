@@ -34,7 +34,7 @@ from scipy.stats import spearmanr
 from sklearn.model_selection import train_test_split
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_PROJECT_ROOT / "main"))
+sys.path.insert(0, str(_PROJECT_ROOT.parent / "main"))
 sys.path.insert(0, str(_PROJECT_ROOT / "experiments"))
 
 from encoder import load_sequences                  # noqa: E402

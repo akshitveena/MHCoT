@@ -46,7 +46,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_PROJECT_ROOT / "main"))
+sys.path.insert(0, str(_PROJECT_ROOT.parent / "main"))
 
 from data import load_dataset                  # noqa: E402
 from encoder import load_pooled                # noqa: E402
