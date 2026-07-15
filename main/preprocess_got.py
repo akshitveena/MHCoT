@@ -53,7 +53,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from datasets import load_dataset
 from tqdm import tqdm
 
-from got_runner import run_got_full
+from Projects.MHCoT.main.got_runner import run_got_full
 
 
 # ---------------------------------------------------------------------------

@@ -158,7 +158,7 @@ class Game24Parser(_ParBase):
 
     def parse_score_answer(self, states, texts):
         # reuse the robust 1-10 extractor from the GSM8K parser
-        from got_runner import GSM8KParser
+        from Projects.MHCoT.main.got_runner import GSM8KParser
         return [GSM8KParser._extract_score(t) for t in texts]
 
 
@@ -190,7 +190,7 @@ def run_game24(numbers, num_initial=3, num_keep=2):
         raise RuntimeError(
             f"graph_of_thoughts unavailable ({_GOT_ERR}). Install 'openai<1.0' "
             f"and graph_of_thoughts (done automatically in the Colab setup).")
-    from got_runner import get_llm, _extract_artifacts  # lazy (needs GoT)
+    from Projects.MHCoT.main.got_runner import get_llm, _extract_artifacts  # lazy (needs GoT)
     lm = get_llm()
     g = build_game24_graph(num_initial, num_keep)
     nums_str = " ".join(str(n) for n in numbers)

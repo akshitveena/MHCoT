@@ -37,8 +37,8 @@ import torch.nn.functional as F
 
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
-sys.path.insert(0, str(_HERE.parent.parent / "main"))
-from signals import make_superposition                                   # noqa: E402
+sys.path.insert(0, str(_HERE.parent / "main"))
+from Projects.MHCoT.complex_mhcot.cvnn.signals import make_superposition                                   # noqa: E402
 from models import MultiHelicalPerChain, RealPerHead, n_params           # noqa: E402
 from soliton import epsilon_helix_loss                                    # noqa: E402
 

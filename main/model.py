@@ -35,7 +35,7 @@ import math
 import torch
 import torch.nn as nn
 
-from complex_ops import (
+from Projects.MHCoT.main.complex_ops import (
     ComplexLift,
     ComplexPositionalEncoding,
     ComplexAttention,
@@ -43,7 +43,7 @@ from complex_ops import (
     modReLU,
     MagnitudeLN,
 )
-from soliton import SolitonCell, per_dim_phase_gap, epsilon_helix_loss
+from Projects.MHCoT.main.soliton import SolitonCell, per_dim_phase_gap, epsilon_helix_loss
 
 
 # ---------------------------------------------------------------------------

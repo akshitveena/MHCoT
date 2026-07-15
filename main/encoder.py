@@ -29,7 +29,7 @@ from pathlib import Path
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from data import load_dataset, ProblemRecord  # sibling import (run from main/ or with path)
+from Projects.MHCoT.main.data import load_dataset, ProblemRecord  # sibling import (run from main/ or with path)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _HIDDEN_DIR = _PROJECT_ROOT / "data" / "hidden_cache"

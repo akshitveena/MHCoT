@@ -28,7 +28,7 @@ _ROOT = _THIS.parent
 if str(_THIS) not in sys.path:
     sys.path.insert(0, str(_THIS))
 
-from got_game24 import generate_puzzles, run_game24, extract_expression, verify  # noqa: E402
+from Projects.MHCoT.main.got_game24 import generate_puzzles, run_game24, extract_expression, verify  # noqa: E402
 from tqdm import tqdm                                                            # noqa: E402
 
 CACHE_DIR = _ROOT / "data" / "got_cache"

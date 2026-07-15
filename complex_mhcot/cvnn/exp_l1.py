@@ -30,7 +30,7 @@ import torch.nn as nn
 
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
-from signals import make_dataset                                   # noqa: E402
+from Projects.MHCoT.complex_mhcot.cvnn.signals import make_dataset                                   # noqa: E402
 from models import ComplexSeqClassifier, RealSeqClassifier, n_params  # noqa: E402
 
 

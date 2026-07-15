@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from env import (propose_random, verify, difficulty, solve_with,        # noqa: E402
+from Projects.MHCoT.real_mhcot.selfplay.env import (propose_random, verify, difficulty, solve_with,        # noqa: E402
                  blind_heuristic, TARGET)
 
 

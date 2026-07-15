@@ -1,6 +1,6 @@
 # MHCoT → Reasoning Verification & Faithfulness
 
-A complete, honest, multi-seed investigation into **how (mathematical) LLM reasoning can be
+A multi-seed investigation into **how (mathematical) LLM reasoning can be
 verified, reranked, and audited — and where it can't.** The project began as a complex-valued
 multi-chain reasoning architecture (**MHCoT**), rigorously **falsified** it, pivoted to a
 real-valued reasoning **verifier** that works, and then ran an honest study of reasoning

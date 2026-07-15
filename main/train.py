@@ -37,9 +37,9 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from encoder import load_sequences, SEQ_PATH        # noqa: E402
-from model import MHCoTEncoder                       # noqa: E402
-from losses import compute_losses, LossConfig        # noqa: E402
+from Projects.MHCoT.main.encoder import load_sequences, SEQ_PATH        # noqa: E402
+from Projects.MHCoT.main.model import MHCoTEncoder                       # noqa: E402
+from Projects.MHCoT.main.losses import compute_losses, LossConfig        # noqa: E402
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 

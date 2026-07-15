@@ -23,7 +23,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
 
-from soliton import epsilon_helix_loss
+from Projects.MHCoT.main.soliton import epsilon_helix_loss
 
 
 @dataclass
@@ -102,7 +102,7 @@ def main() -> None:
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from model import MHCoTEncoder
+    from Projects.MHCoT.main.model import MHCoTEncoder
 
     dev = _device()
     print(f"[device] {dev}\n")
