@@ -39,13 +39,13 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_PROJECT_ROOT.parent / "main"))
+sys.path.insert(0, str(_PROJECT_ROOT / "main"))
 sys.path.insert(0, str(_PROJECT_ROOT / "experiments"))
 
 from encoder import load_sequences                 # noqa: E402
 from model import MHCoTEncoder                       # noqa: E402
 from train import SeqDataset, collate, _device       # noqa: E402
-from exp_calibration import ece                      # noqa: E402
+from Projects.MHCoT.complex_mhcot.experiments.exp_calibration import ece                      # noqa: E402
 
 REAL_ECE = 0.240
 COMPLEX_N2_ECE = 0.070

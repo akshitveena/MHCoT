@@ -20,11 +20,11 @@ import sys
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(_HERE.parent.parent / "main"))
+sys.path.insert(0, str(_HERE.parent / "main"))
 sys.path.insert(0, str(_HERE.parent / "solver"))
 sys.path.insert(0, str(_HERE))
-from env import TARGET                                          # noqa: E402
-from proposer import DifficultyProposer                        # noqa: E402
+from Projects.MHCoT.real_mhcot.selfplay.env import TARGET                                          # noqa: E402
+from Projects.MHCoT.real_mhcot.selfplay.proposer import DifficultyProposer                        # noqa: E402
 from game24 import gen_puzzles, Puzzle                         # noqa: E402
 
 

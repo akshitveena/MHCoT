@@ -23,7 +23,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "main"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "main"))
 from complex_ops import (ComplexLinear, ComplexAttention, modReLU,        # noqa: E402
                          MagnitudeLN, ComplexPositionalEncoding)
 from soliton import SolitonCell, epsilon_helix_loss                       # noqa: E402
@@ -185,7 +185,7 @@ def n_params(m):
 if __name__ == "__main__":
     import sys as _s
     _s.path.insert(0, str(Path(__file__).resolve().parent))
-    from signals import make_dataset
+    from Projects.MHCoT.complex_mhcot.cvnn.signals import make_dataset
     Z, y = make_dataset(16, n_classes=8, T=64, seed=0)
     cm = ComplexSeqClassifier(); rm = RealSeqClassifier()
     print(f"complex out {tuple(cm(Z).shape)}  params={n_params(cm)/1e3:.1f}K")
