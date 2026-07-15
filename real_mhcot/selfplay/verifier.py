@@ -28,10 +28,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 _HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(_HERE.parent.parent / "main"))
+sys.path.insert(0, str(_HERE.parent / "main"))
 sys.path.insert(0, str(_HERE.parent / "solver"))
 sys.path.insert(0, str(_HERE))
-from loop import _load_agent                                    # noqa: E402
+from Projects.MHCoT.real_mhcot.selfplay.loop import _load_agent                                    # noqa: E402
 from game24 import gen_puzzles, canon                           # noqa: E402
 
 
